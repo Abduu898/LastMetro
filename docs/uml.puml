@@ -1,0 +1,81 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+package "com.lastmetro.model" {
+    abstract class Entity {
+        # x: double
+        # y: double
+        # width: double
+        # height: double
+        + update(deltaTime: double): void
+        + intersects(other: Entity): boolean
+    }
+
+    class Commuter {
+        - velocityY: double
+        - currentState: PlayerState
+        - debuffTimer: double
+        - invincibleTimer: double
+        + jump(): void
+        + slide(active: boolean): void
+        + setState(state: PlayerState): void
+        + applyDebuff(duration: double): void
+    }
+
+    abstract class Hazard {
+        # strategy: MovementStrategy
+        + update(deltaTime: double): void
+        + abstract onCollide(player: Commuter): String
+    }
+
+    class DogPoop
+    class EScooter
+    class Pigeon
+
+    Entity <|-- Commuter
+    Entity <|-- Hazard
+    Hazard <|-- DogPoop
+    Hazard <|-- EScooter
+    Hazard <|-- Pigeon
+}
+
+package "com.lastmetro.patterns" {
+    interface PlayerState {
+        + handleJump(player: Commuter): void
+        + handleSlide(player: Commuter, active: boolean): void
+        + update(player: Commuter, deltaTime: double): void
+    }
+
+    class RunningState
+    class JumpingState
+    class SlidingState
+
+    PlayerState <|.. RunningState
+    PlayerState <|.. JumpingState
+    PlayerState <|.. SlidingState
+    Commuter o-- PlayerState
+
+    interface MovementStrategy {
+        + move(hazard: Hazard, deltaTime: double): void
+    }
+
+    class StaticGroundStrategy
+    class FastChargeStrategy
+    class AerialSwoopStrategy
+
+    MovementStrategy <|.. StaticGroundStrategy
+    MovementStrategy <|.. FastChargeStrategy
+    MovementStrategy <|.. AerialSwoopStrategy
+    Hazard o-- MovementStrategy
+
+    class HazardFactory {
+        + createRandomHazard(spawnX: double, groundY: double): Hazard
+    }
+    HazardFactory ..> Hazard : creates
+
+    interface GameObserver {
+        + onSarcasticEvent(message: String): void
+        + onGameOver(reason: String): void
+    }
+}
+@enduml
