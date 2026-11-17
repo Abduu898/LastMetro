@@ -1,7 +1,7 @@
 package com.lastmetro.model;
 
-import com.lastmetro.patterns.PlayerState;
-import com.lastmetro.patterns.RunningState;
+import com.lastmetro.patterns.state.PlayerState;
+import com.lastmetro.patterns.state.RunningState;
 
 /**
  * The Parisian commuter sprinting for the last metro.
@@ -18,6 +18,10 @@ public class Commuter extends Entity {
     private boolean slideHeld = false;
     private PlayerState currentState;
 
+    // Debuff timers (in seconds)
+    private double stenchTimer = 0.0; // Inverts Jump and Slide controls
+    private double slowTimer = 0.0;   // Slows down street scroll speed
+
     public Commuter(double x, double groundY) {
         super(x, groundY - STANDING_HEIGHT, 50.0, STANDING_HEIGHT);
         this.groundY = groundY;
@@ -26,21 +30,51 @@ public class Commuter extends Entity {
 
     @Override
     public void update(double deltaTime) {
+        if (stenchTimer > 0) stenchTimer = Math.max(0, stenchTimer - deltaTime);
+        if (slowTimer > 0) slowTimer = Math.max(0, slowTimer - deltaTime);
         currentState.update(this, deltaTime);
     }
 
     public void onJumpPressed() {
-        currentState.handleJumpPress(this);
+        if (isConfused()) {
+            onSlideRaw(true);
+        } else {
+            currentState.handleJumpPress(this);
+        }
     }
 
     public void onJumpReleased() {
-        currentState.handleJumpRelease(this);
+        if (isConfused()) {
+            onSlideRaw(false);
+        } else {
+            currentState.handleJumpRelease(this);
+        }
     }
 
     public void onSlideChanged(boolean held) {
+        if (isConfused()) {
+            if (held) currentState.handleJumpPress(this);
+            else currentState.handleJumpRelease(this);
+        } else {
+            onSlideRaw(held);
+        }
+    }
+
+    private void onSlideRaw(boolean held) {
         this.slideHeld = held;
         currentState.handleSlide(this, held);
     }
+
+    public void applyStenchDebuff(double duration) {
+        this.stenchTimer = duration;
+    }
+
+    public void applySlowDebuff(double duration) {
+        this.slowTimer = duration;
+    }
+
+    public boolean isConfused() { return stenchTimer > 0; }
+    public boolean isSlowed() { return slowTimer > 0; }
 
     public void enterSlideHitbox() {
         this.height = SLIDING_HEIGHT;

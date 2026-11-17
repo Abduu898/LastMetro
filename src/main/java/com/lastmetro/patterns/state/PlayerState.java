@@ -1,4 +1,4 @@
-package com.lastmetro.patterns;
+package com.lastmetro.patterns.state;
 
 import com.lastmetro.model.Commuter;
 
