@@ -142,6 +142,28 @@ class CommuterTest {
     }
 
     @Test
+    void aDebuffExpiringMidPressDoesNotChangeHowThatKeyIsReleased() {
+        player.applyStenchDebuff(0.1);
+        player.onJumpPressed();
+        assertEquals("SLIDING", player.getCurrentState().getStateName());
+        player.update(0.2);
+        assertFalse(player.isConfused());
+        player.onJumpReleased();
+        assertEquals("RUNNING", player.getCurrentState().getStateName());
+        assertFalse(player.isSlideHeld());
+
+        player.applyStenchDebuff(0.1);
+        player.onSlideChanged(true);
+        assertEquals("JUMPING", player.getCurrentState().getStateName());
+        player.update(0.2);
+        double velocityBeforeRelease = player.getVelocityY();
+        player.onSlideChanged(false);
+
+        assertFalse(player.isConfused());
+        assertEquals(velocityBeforeRelease / 2.0, player.getVelocityY());
+    }
+
+    @Test
     void debuffsExpireAndGroundHelpersWork() {
         player.applyStenchDebuff(0.2);
         player.applySlowDebuff(0.2);

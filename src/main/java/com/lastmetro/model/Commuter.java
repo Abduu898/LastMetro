@@ -22,6 +22,12 @@ public class Commuter extends Entity {
     private double jumpBufferTimer = 0.0;
     private boolean jumpButtonHeld = false;
     private boolean slideHeld = false;
+    private boolean jumpKeyDown = false;
+    private boolean slideKeyDown = false;
+    private boolean jumpKeyWasInverted = false;
+    private boolean slideKeyWasInverted = false;
+    private int jumpActionHolds = 0;
+    private int slideActionHolds = 0;
     private PlayerState currentState;
 
     // Debuff timers (in seconds)
@@ -43,6 +49,12 @@ public class Commuter extends Entity {
         this.jumpBufferTimer = 0.0;
         this.jumpButtonHeld = false;
         this.slideHeld = false;
+        this.jumpKeyDown = false;
+        this.slideKeyDown = false;
+        this.jumpKeyWasInverted = false;
+        this.slideKeyWasInverted = false;
+        this.jumpActionHolds = 0;
+        this.slideActionHolds = 0;
         this.currentState = new RunningState();
         this.stenchTimer = 0.0;
         this.slowTimer = 0.0;
@@ -57,28 +69,51 @@ public class Commuter extends Entity {
     }
 
     public void onJumpPressed() {
-        if (isConfused()) {
-            onSlideRaw(true);
-        } else {
-            jumpPressed();
-        }
+        if (jumpKeyDown) return;
+        jumpKeyDown = true;
+        jumpKeyWasInverted = isConfused();
+        if (jumpKeyWasInverted) pressSlideAction();
+        else pressJumpAction();
     }
 
     public void onJumpReleased() {
-        if (isConfused()) {
-            onSlideRaw(false);
-        } else {
-            jumpReleased();
-        }
+        if (!jumpKeyDown) return;
+        jumpKeyDown = false;
+        if (jumpKeyWasInverted) releaseSlideAction();
+        else releaseJumpAction();
+        jumpKeyWasInverted = false;
     }
 
     public void onSlideChanged(boolean held) {
-        if (isConfused()) {
-            if (held) jumpPressed();
-            else jumpReleased();
+        if (held) {
+            if (slideKeyDown) return;
+            slideKeyDown = true;
+            slideKeyWasInverted = isConfused();
+            if (slideKeyWasInverted) pressJumpAction();
+            else pressSlideAction();
         } else {
-            onSlideRaw(held);
+            if (!slideKeyDown) return;
+            slideKeyDown = false;
+            if (slideKeyWasInverted) releaseJumpAction();
+            else releaseSlideAction();
+            slideKeyWasInverted = false;
         }
+    }
+
+    private void pressJumpAction() {
+        if (jumpActionHolds++ == 0) jumpPressed();
+    }
+
+    private void releaseJumpAction() {
+        if (jumpActionHolds > 0 && --jumpActionHolds == 0) jumpReleased();
+    }
+
+    private void pressSlideAction() {
+        if (slideActionHolds++ == 0) onSlideRaw(true);
+    }
+
+    private void releaseSlideAction() {
+        if (slideActionHolds > 0 && --slideActionHolds == 0) onSlideRaw(false);
     }
 
     private void onSlideRaw(boolean held) {
@@ -111,14 +146,22 @@ public class Commuter extends Entity {
 
     /** Clears held inputs when pausing or when the game window loses focus. */
     public void releaseInputs() {
-        if (jumpButtonHeld) currentState.handleJumpRelease(this);
-        jumpButtonHeld = false;
+        if (jumpKeyDown) onJumpReleased();
+        if (slideKeyDown) onSlideChanged(false);
         jumpBufferTimer = 0.0;
-        slideHeld = false;
+        jumpKeyDown = false;
+        slideKeyDown = false;
+        jumpKeyWasInverted = false;
+        slideKeyWasInverted = false;
+        jumpActionHolds = 0;
+        slideActionHolds = 0;
+        jumpButtonHeld = false;
+        if (slideHeld) onSlideRaw(false);
         if (currentState.getStateName().equals("SLIDING")) {
             exitSlideHitbox();
             currentState = new RunningState();
         }
+        slideHeld = false;
     }
 
     public void applyStenchDebuff(double duration) {
