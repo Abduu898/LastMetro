@@ -122,22 +122,45 @@ public class MainApp extends Application implements GameObserver {
     }
 
     private void handleMouseClick(double x, double y) {
-        if ((screen != GameScreen.MENU && screen != GameScreen.SETTINGS)
-                || screenTransition.isRunning() || !viewport.contains(x, y)) return;
+        if (screenTransition.isRunning() || !viewport.contains(x, y)) return;
+        double logicalX = viewport.toLogicalX(x);
         double logicalY = viewport.toLogicalY(y);
-        if (screen == GameScreen.SETTINGS) {
-            if (logicalY >= 250 && logicalY < 330) bindingPrompt = "jump";
-            else if (logicalY >= 360 && logicalY < 440) bindingPrompt = "slide";
+        if (screen == GameScreen.HOW_TO_PLAY) {
+            if (logicalX >= 470 && logicalX < 810 && logicalY >= 580 && logicalY < 644) {
+                transitionTo(() -> screen = GameScreen.MENU);
+            }
             return;
         }
-        if (logicalY >= 280 && logicalY < 350) {
+        if (screen == GameScreen.PAUSED) {
+            if (logicalY >= 410 && logicalY < 474 && logicalX >= 300 && logicalX < 620) {
+                transitionTo(() -> screen = GameScreen.PLAYING);
+            } else if (logicalY >= 410 && logicalY < 474 && logicalX >= 660 && logicalX < 980) {
+                transitionTo(() -> screen = GameScreen.MENU);
+            }
+            return;
+        }
+        if (screen == GameScreen.RESULTS) {
+            if (logicalY >= 485 && logicalY < 549 && logicalX >= 300 && logicalX < 620) {
+                transitionTo(() -> startGame(world.getMode()));
+            } else if (logicalY >= 485 && logicalY < 549 && logicalX >= 660 && logicalX < 980) {
+                transitionTo(() -> screen = GameScreen.MENU);
+            }
+            return;
+        }
+        if (screen != GameScreen.MENU && screen != GameScreen.SETTINGS) return;
+        if (screen == GameScreen.SETTINGS) {
+            if (logicalX >= 360 && logicalX < 920 && logicalY >= 250 && logicalY < 330) bindingPrompt = "jump";
+            else if (logicalX >= 360 && logicalX < 920 && logicalY >= 360 && logicalY < 440) bindingPrompt = "slide";
+            return;
+        }
+        if (logicalX >= 360 && logicalX < 920 && logicalY >= 280 && logicalY < 346) {
             transitionTo(() -> startGame(GameWorld.Mode.CATCH_THE_METRO));
-        } else if (logicalY >= 360 && logicalY < 430) {
+        } else if (logicalX >= 360 && logicalX < 920 && logicalY >= 360 && logicalY < 426) {
             transitionTo(() -> startGame(GameWorld.Mode.ENDLESS));
-        } else if (logicalY >= 440 && logicalY < 510) {
+        } else if (logicalX >= 360 && logicalX < 920 && logicalY >= 440 && logicalY < 506) {
             transitionTo(() -> screen = GameScreen.HOW_TO_PLAY);
-        } else if (logicalY >= 520 && logicalY < 590) {
-            transitionTo(() -> screen = GameScreen.SETTINGS);
+        } else if (logicalX >= 360 && logicalX < 920 && logicalY >= 520 && logicalY < 586) {
+            openSettings();
         }
     }
 
@@ -151,7 +174,7 @@ public class MainApp extends Application implements GameObserver {
             } else if (code == KeyCode.H) {
                 transitionTo(() -> screen = GameScreen.HOW_TO_PLAY);
             } else if (code == KeyCode.O) {
-                transitionTo(() -> screen = GameScreen.SETTINGS);
+                openSettings();
             }
             return;
         }
@@ -196,6 +219,13 @@ public class MainApp extends Application implements GameObserver {
         } else if (isSlideKey(code)) {
             world.getPlayer().onSlideChanged(true);
         }
+    }
+
+    private void openSettings() {
+        transitionTo(() -> {
+            bindingPrompt = "";
+            screen = GameScreen.SETTINGS;
+        });
     }
 
     private boolean isJumpKey(KeyCode code) {

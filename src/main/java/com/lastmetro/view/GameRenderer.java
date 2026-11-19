@@ -59,15 +59,9 @@ public final class GameRenderer {
             case PLAYING, PAUSED, RESULTS -> {
                 drawGame(gc, world, bannerText, bannerTimer, endlessHighScore);
                 if (screen == GameScreen.PAUSED) {
-                    drawOverlay(gc, "PAUSED", "P / ESC  Resume     M  Main menu");
+                    drawPause(gc, world);
                 } else if (screen == GameScreen.RESULTS) {
-                    String title = world.isPlayerWon() ? "YOU CAUGHT THE LAST METRO!" : "RUN OVER";
-                    String results = gameOverReason + String.format("\nDistance: %.0f m   Score: %d",
-                            world.getDistanceMeters(), world.getScore());
-                    if (world.getMode() == GameWorld.Mode.ENDLESS) {
-                        results += String.format("   Best: %d", endlessHighScore);
-                    }
-                    drawOverlay(gc, title, results + "\n\nR  Try again     M  Main menu");
+                    drawResults(gc, world, gameOverReason, endlessHighScore);
                 }
             }
         }
@@ -182,7 +176,8 @@ public final class GameRenderer {
         gc.fillText("Endless Commute: survive and beat your distance.", 370, 530);
         gc.setFill(Color.LIGHTGRAY);
         gc.setFont(Font.font("Consolas", 17));
-        gc.fillText("Press ENTER or ESC to return", 430, 610);
+        gc.fillText("Press ENTER or ESC, or click below", 430, 565);
+        drawButton(gc, 470, 580, 340, "BACK TO MENU");
     }
 
     private void drawGame(GraphicsContext gc, GameWorld world, String bannerText,
@@ -275,16 +270,51 @@ public final class GameRenderer {
         gc.fillRect(trainX + 130 - doorWidth, GROUND_Y - 135, doorWidth, 130);
     }
 
-    private void drawOverlay(GraphicsContext gc, String title, String message) {
-        gc.setFill(Color.rgb(10, 10, 20, 0.88));
-        gc.fillRect(0, 0, WIDTH, HEIGHT);
-        gc.setFill(title.startsWith("YOU CAUGHT") ? Color.LIGHTGREEN : Color.GOLD);
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 38));
-        gc.fillText(title, 250, 285);
+    private void drawPause(GraphicsContext gc, GameWorld world) {
+        drawOverlayPanel(gc);
+        gc.setFill(Color.GOLD);
+        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 44));
+        gc.fillText("PAUSED", 530, 260);
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("Consolas", 20));
-        String[] lines = message.split("\\n");
-        for (int i = 0; i < lines.length; i++) gc.fillText(lines[i], 260, 350 + i * 34);
+        gc.fillText(String.format("Distance: %.0f m   Score: %d", world.getDistanceMeters(), world.getScore()), 400, 315);
+        gc.fillText("P / ESC resumes · M returns to the main menu", 365, 355);
+        drawButton(gc, 300, 410, 320, "RESUME");
+        drawButton(gc, 660, 410, 320, "MAIN MENU");
+    }
+
+    private void drawResults(GraphicsContext gc, GameWorld world, String reason, int endlessHighScore) {
+        drawOverlayPanel(gc);
+        String title = world.isPlayerWon() ? "YOU CAUGHT THE LAST METRO!" : "RUN OVER";
+        gc.setFill(title.startsWith("YOU CAUGHT") ? Color.LIGHTGREEN : Color.GOLD);
+        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 38));
+        gc.fillText(title, world.isPlayerWon() ? 250 : 510, 255);
+        gc.setFill(Color.WHITE);
+        gc.setFont(Font.font("Consolas", 20));
+        gc.fillText(reason, 260, 315);
+        gc.fillText(String.format("Distance: %.0f m    Score: %d", world.getDistanceMeters(), world.getScore()), 330, 355);
+        if (world.getMode() == GameWorld.Mode.ENDLESS) {
+            gc.fillText(String.format("Personal best: %d", endlessHighScore), 500, 390);
+        }
+        gc.setFont(Font.font("Consolas", 16));
+        gc.fillText("R retries · M returns to the main menu", 430, 445);
+        drawButton(gc, 300, 485, 320, "TRY AGAIN");
+        drawButton(gc, 660, 485, 320, "MAIN MENU");
+    }
+
+    private void drawOverlayPanel(GraphicsContext gc) {
+        gc.setFill(Color.rgb(10, 10, 20, 0.88));
+        gc.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    private void drawButton(GraphicsContext gc, double x, double y, double width, String label) {
+        gc.setFill(Color.web("#303552"));
+        gc.fillRoundRect(x, y, width, 64, 12, 12);
+        gc.setStroke(Color.web("#f2cc8f"));
+        gc.strokeRoundRect(x, y, width, 64, 12, 12);
+        gc.setFill(Color.WHITE);
+        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 20));
+        gc.fillText(label, x + 32, y + 40);
     }
 
     private void drawTransition(GraphicsContext gc, double alpha) {
