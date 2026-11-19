@@ -113,4 +113,31 @@ class CommuterTest {
         assertEquals(Commuter.STANDING_HEIGHT, player.getHeight());
         assertEquals(GROUND_Y - Commuter.STANDING_HEIGHT, player.getY());
     }
+
+    @Test
+    void resetRestoresFreshRunStateFromJumpingAndSliding() {
+        player.onJumpPressed();
+        player.update(0.1);
+        player.applyStenchDebuff(5.0);
+        player.applySlowDebuff(5.0);
+        player.reset();
+
+        assertFreshRunState();
+
+        player.onSlideChanged(true);
+        player.reset();
+
+        assertFreshRunState();
+    }
+
+    private void assertFreshRunState() {
+        assertEquals(150.0, player.getX());
+        assertEquals(GROUND_Y - Commuter.STANDING_HEIGHT, player.getY());
+        assertEquals(Commuter.STANDING_HEIGHT, player.getHeight());
+        assertEquals(0.0, player.getVelocityY());
+        assertFalse(player.isSlideHeld());
+        assertEquals("RUNNING", player.getCurrentState().getStateName());
+        assertFalse(player.isConfused());
+        assertFalse(player.isSlowed());
+    }
 }

@@ -14,6 +14,7 @@ public class Commuter extends Entity {
     public static final double FAST_FALL_SPEED = 1100.0;
 
     private final double groundY;
+    private final double startX;
     private double velocityY = 0;
     private boolean slideHeld = false;
     private PlayerState currentState;
@@ -24,8 +25,20 @@ public class Commuter extends Entity {
 
     public Commuter(double x, double groundY) {
         super(x, groundY - STANDING_HEIGHT, 50.0, STANDING_HEIGHT);
+        this.startX = x;
         this.groundY = groundY;
         this.currentState = new RunningState();
+    }
+
+    public void reset() {
+        this.x = startX;
+        this.height = STANDING_HEIGHT;
+        this.y = groundY - STANDING_HEIGHT;
+        this.velocityY = 0.0;
+        this.slideHeld = false;
+        this.currentState = new RunningState();
+        this.stenchTimer = 0.0;
+        this.slowTimer = 0.0;
     }
 
     @Override

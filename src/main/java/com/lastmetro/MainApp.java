@@ -1,9 +1,15 @@
 package com.lastmetro;
 
-import com.lastmetro.model.Commuter;
+import com.lastmetro.animation.FixedStepAccumulator;
+import com.lastmetro.animation.ScreenTransition;
 import com.lastmetro.model.GameWorld;
-import com.lastmetro.model.Hazard;
+import com.lastmetro.persistence.HighScoreStore;
+import com.lastmetro.persistence.GameSettings;
+import com.lastmetro.persistence.GameSettingsStore;
 import com.lastmetro.patterns.observer.GameObserver;
+import com.lastmetro.view.GameRenderer;
+import com.lastmetro.view.GameScreen;
+import com.lastmetro.view.GameViewport;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.scene.Scene;
@@ -12,179 +18,233 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Font;
-import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 
-public class MainApp extends Application implements GameObserver {
+import java.nio.file.Path;
 
+public class MainApp extends Application implements GameObserver {
     public static final int WIDTH = 1280;
     public static final int HEIGHT = 720;
     public static final double GROUND_Y = 580.0;
 
     private GameWorld world;
-    private String bannerText = "01:14 AM — Ligne 13 ferme dans 45s ! [SPACE] Sauter  [DOWN] Glisser";
-    private double bannerTimer = 5.0;
+    private GameScreen screen = GameScreen.MENU;
+    private String bannerText = "";
+    private double bannerTimer = 0.0;
     private String gameOverReason = "";
+    private final HighScoreStore highScoreStore = new HighScoreStore(
+            Path.of(System.getProperty("user.home"), ".lastmetro-highscore"));
+    private final GameSettingsStore settingsStore = new GameSettingsStore(
+            Path.of(System.getProperty("user.home"), ".lastmetro", "settings.properties"));
+    private GameSettings settings = settingsStore.load();
+    private String bindingPrompt = "";
+    private int endlessHighScore = highScoreStore.load();
+
+    private final GameRenderer renderer = new GameRenderer();
+    private final FixedStepAccumulator simulationClock = new FixedStepAccumulator();
+    private final ScreenTransition screenTransition = new ScreenTransition(0.16);
+    private final GameViewport viewport = new GameViewport(WIDTH, HEIGHT);
 
     @Override
     public void start(Stage stage) {
-        world = new GameWorld(WIDTH, GROUND_Y);
-        world.addObserver(this);
-
         Canvas canvas = new Canvas(WIDTH, HEIGHT);
-        GraphicsContext gc = canvas.getGraphicsContext2D();
-
         Pane root = new Pane(canvas);
+        canvas.widthProperty().bind(root.widthProperty());
+        canvas.heightProperty().bind(root.heightProperty());
         Scene scene = new Scene(root, WIDTH, HEIGHT);
 
-        scene.setOnKeyPressed(e -> {
-            if (world.isGameOver() && e.getCode() == KeyCode.R) {
-                world.reset();
-                bannerText = "Nouvelle tentative. La RATP croit en toi (non).";
-                bannerTimer = 3.5;
-                return;
-            }
-            if (world.isFinaleActive()) return;
-
-            if (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.UP || e.getCode() == KeyCode.Z) {
-                world.getPlayer().onJumpPressed();
-            } else if (e.getCode() == KeyCode.DOWN || e.getCode() == KeyCode.S) {
-                world.getPlayer().onSlideChanged(true);
-            }
+        scene.setOnKeyPressed(event -> handleKeyPressed(event.getCode()));
+        scene.setOnKeyReleased(event -> {
+            if (screen != GameScreen.PLAYING || screenTransition.isRunning() || world.isFinaleActive()) return;
+            if (isJumpKey(event.getCode())) world.getPlayer().onJumpReleased();
+            else if (isSlideKey(event.getCode())) world.getPlayer().onSlideChanged(false);
         });
+        scene.setOnMouseClicked(event -> handleMouseClick(event.getX(), event.getY()));
 
-        scene.setOnKeyReleased(e -> {
-            if (world.isFinaleActive()) return;
-
-            if (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.UP || e.getCode() == KeyCode.Z) {
-                world.getPlayer().onJumpReleased();
-            } else if (e.getCode() == KeyCode.DOWN || e.getCode() == KeyCode.S) {
-                world.getPlayer().onSlideChanged(false);
-            }
-        });
-
-        stage.setTitle("Last Métro - Ligne 13 Edition");
+        stage.setTitle("Last Métro — Dernière Rame");
         stage.setScene(scene);
-        stage.setResizable(false);
+        stage.setResizable(true);
         stage.show();
+        root.requestFocus();
 
         new AnimationTimer() {
-            private long lastTime = 0;
+            private long lastTime;
 
             @Override
             public void handle(long now) {
-                if (lastTime == 0) {
-                    lastTime = now;
-                    return;
-                }
-                double deltaTime = Math.min((now - lastTime) / 1_000_000_000.0, 0.05);
+                double deltaTime = lastTime == 0 ? 0 : (now - lastTime) / 1_000_000_000.0;
                 lastTime = now;
+                screenTransition.update(Math.min(deltaTime, 0.25));
+                renderer.updateUi(deltaTime);
 
-                if (bannerTimer > 0) bannerTimer = Math.max(0, bannerTimer - deltaTime);
-                world.update(deltaTime);
-                render(gc);
+                if (screen == GameScreen.PLAYING && world != null && !screenTransition.isRunning()) {
+                    updateSimulation(deltaTime);
+                } else {
+                    simulationClock.reset();
+                }
+
+                drawFrame(canvas, canvas.getGraphicsContext2D());
             }
         }.start();
     }
 
+    private void updateSimulation(double frameDelta) {
+        int steps = simulationClock.advance(frameDelta);
+        for (int i = 0; i < steps && !world.isGameOver(); i++) {
+            double step = FixedStepAccumulator.STEP_SECONDS;
+            if (bannerTimer > 0) bannerTimer = Math.max(0, bannerTimer - step);
+            world.update(step);
+            renderer.update(world, step);
+        }
+
+        if (world.isGameOver() && !screenTransition.isRunning()) {
+            if (world.getMode() == GameWorld.Mode.ENDLESS) {
+                endlessHighScore = highScoreStore.saveIfHigher(world.getScore());
+            }
+            transitionTo(() -> screen = GameScreen.RESULTS);
+        }
+    }
+
+    private void drawFrame(Canvas canvas, GraphicsContext gc) {
+        viewport.resize(canvas.getWidth(), canvas.getHeight());
+        gc.setFill(Color.web("#1a1a2e"));
+        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        if (viewport.getScale() <= 0.0) return;
+
+        gc.save();
+        gc.translate(viewport.getOffsetX(), viewport.getOffsetY());
+        gc.scale(viewport.getScale(), viewport.getScale());
+        renderer.render(gc, screen, world, bannerText, bannerTimer, gameOverReason,
+                endlessHighScore, settings.jumpKey().getName(), settings.slideKey().getName(),
+                bindingPrompt, screenTransition.getAlpha());
+        gc.restore();
+    }
+
+    private void handleMouseClick(double x, double y) {
+        if ((screen != GameScreen.MENU && screen != GameScreen.SETTINGS)
+                || screenTransition.isRunning() || !viewport.contains(x, y)) return;
+        double logicalY = viewport.toLogicalY(y);
+        if (screen == GameScreen.SETTINGS) {
+            if (logicalY >= 250 && logicalY < 330) bindingPrompt = "jump";
+            else if (logicalY >= 360 && logicalY < 440) bindingPrompt = "slide";
+            return;
+        }
+        if (logicalY >= 280 && logicalY < 350) {
+            transitionTo(() -> startGame(GameWorld.Mode.CATCH_THE_METRO));
+        } else if (logicalY >= 360 && logicalY < 430) {
+            transitionTo(() -> startGame(GameWorld.Mode.ENDLESS));
+        } else if (logicalY >= 440 && logicalY < 510) {
+            transitionTo(() -> screen = GameScreen.HOW_TO_PLAY);
+        } else if (logicalY >= 520 && logicalY < 590) {
+            transitionTo(() -> screen = GameScreen.SETTINGS);
+        }
+    }
+
+    private void handleKeyPressed(KeyCode code) {
+        if (screenTransition.isRunning()) return;
+        if (screen == GameScreen.MENU) {
+            if (code == KeyCode.DIGIT1 || code == KeyCode.NUMPAD1 || code == KeyCode.ENTER) {
+                transitionTo(() -> startGame(GameWorld.Mode.CATCH_THE_METRO));
+            } else if (code == KeyCode.DIGIT2 || code == KeyCode.NUMPAD2) {
+                transitionTo(() -> startGame(GameWorld.Mode.ENDLESS));
+            } else if (code == KeyCode.H) {
+                transitionTo(() -> screen = GameScreen.HOW_TO_PLAY);
+            } else if (code == KeyCode.O) {
+                transitionTo(() -> screen = GameScreen.SETTINGS);
+            }
+            return;
+        }
+        if (screen == GameScreen.HOW_TO_PLAY) {
+            if (code == KeyCode.ESCAPE || code == KeyCode.ENTER) transitionTo(() -> screen = GameScreen.MENU);
+            return;
+        }
+        if (screen == GameScreen.SETTINGS) {
+            if (bindingPrompt.equals("jump") || bindingPrompt.equals("slide")) {
+                if (code == KeyCode.ESCAPE) bindingPrompt = "";
+                else bindKey(code);
+            } else if (code == KeyCode.ESCAPE || code == KeyCode.ENTER) {
+                transitionTo(() -> screen = GameScreen.MENU);
+            } else if (code == KeyCode.J) bindingPrompt = "jump";
+            else if (code == KeyCode.S) bindingPrompt = "slide";
+            return;
+        }
+        if (screen == GameScreen.PAUSED) {
+            if (code == KeyCode.P || code == KeyCode.ESCAPE) {
+                transitionTo(() -> screen = GameScreen.PLAYING);
+            } else if (code == KeyCode.M) {
+                transitionTo(() -> screen = GameScreen.MENU);
+            }
+            return;
+        }
+        if (screen == GameScreen.RESULTS) {
+            if (code == KeyCode.R) {
+                transitionTo(() -> startGame(world.getMode()));
+            } else if (code == KeyCode.M || code == KeyCode.ESCAPE) {
+                transitionTo(() -> screen = GameScreen.MENU);
+            }
+            return;
+        }
+
+        if (code == KeyCode.P || code == KeyCode.ESCAPE) {
+            transitionTo(() -> {
+                world.getPlayer().onSlideChanged(false);
+                screen = GameScreen.PAUSED;
+            });
+        } else if (isJumpKey(code)) {
+            world.getPlayer().onJumpPressed();
+        } else if (isSlideKey(code)) {
+            world.getPlayer().onSlideChanged(true);
+        }
+    }
+
+    private boolean isJumpKey(KeyCode code) {
+        return code == settings.jumpKey();
+    }
+
+    private boolean isSlideKey(KeyCode code) {
+        return code == settings.slideKey();
+    }
+
+    private void bindKey(KeyCode code) {
+        try {
+            settings = bindingPrompt.equals("jump") ? settings.withJumpKey(code) : settings.withSlideKey(code);
+            boolean saved = settingsStore.save(settings);
+            bindingPrompt = "";
+            if (!saved) {
+                bindingPrompt = "unsaved";
+            }
+        } catch (IllegalArgumentException ignored) {
+            bindingPrompt = "reserved";
+        }
+    }
+
+    private void startGame(GameWorld.Mode mode) {
+        world = new GameWorld(WIDTH, GROUND_Y, mode);
+        world.addObserver(this);
+        simulationClock.reset();
+        renderer.resetAnimations();
+        screen = GameScreen.PLAYING;
+        bannerText = mode == GameWorld.Mode.ENDLESS
+                ? "Endless Commute — survive and set a distance record!"
+                : "Catch the Last Metro — reach 500 m before time runs out!";
+        bannerTimer = 4.0;
+        gameOverReason = "";
+    }
+
+    private void transitionTo(Runnable action) {
+        simulationClock.reset();
+        screenTransition.start(action);
+    }
+
     @Override
     public void onSarcasticEvent(String message) {
-        this.bannerText = message;
-        this.bannerTimer = 3.5;
+        bannerText = message;
+        bannerTimer = 3.0;
     }
 
     @Override
     public void onFinaleTriggered(String reason) {
-        this.gameOverReason = reason;
-    }
-
-    private void render(GraphicsContext gc) {
-        // Parisian night sky
-        gc.setFill(Color.web("#1a1a2e"));
-        gc.fillRect(0, 0, WIDTH, HEIGHT);
-
-        // Sidewalk / Platform
-        gc.setFill(Color.web("#4a4e69"));
-        gc.fillRect(0, GROUND_Y, WIDTH, HEIGHT - GROUND_Y);
-
-        // Render Hazards
-        for (Hazard h : world.getHazards()) {
-            switch (h.getType()) {
-                case "DOG_POOP" -> gc.setFill(Color.SADDLEBROWN);
-                case "E_SCOOTER" -> gc.setFill(Color.LIMEGREEN);
-                case "PIGEON" -> gc.setFill(Color.LIGHTSLATEGRAY);
-                default -> gc.setFill(Color.CRIMSON);
-            }
-            gc.fillRect(h.getX(), h.getY(), h.getWidth(), h.getHeight());
-        }
-
-        // Render Metro Train during 00:00 Finale
-        if (world.isFinaleActive()) {
-            double trainX = world.getMetroTrainX();
-            gc.setFill(Color.web("#e0e1dd"));
-            gc.fillRect(trainX, GROUND_Y - 160, 480, 160);
-            gc.setFill(Color.web("#00b4d8")); // RATP turquoise stripe
-            gc.fillRect(trainX, GROUND_Y - 70, 480, 22);
-
-            // Doors slamming shut
-            double doorWidth = 45 * world.getMetroDoorProgress();
-            gc.setFill(Color.DARKSLATEGRAY);
-            gc.fillRect(trainX + 40, GROUND_Y - 135, doorWidth, 130);
-            gc.fillRect(trainX + 130 - doorWidth, GROUND_Y - 135, doorWidth, 130);
-        }
-
-        // Render Commuter
-        Commuter p = world.getPlayer();
-        if (p.isConfused()) {
-            gc.setFill(Color.YELLOWGREEN); // Stench debuff tint
-        } else if (p.isSlowed()) {
-            gc.setFill(Color.ORANGE);
-        } else {
-            gc.setFill(Color.DODGERBLUE);
-        }
-        gc.fillRect(p.getX(), p.getY(), p.getWidth(), p.getHeight());
-
-        // HUD: RATP Countdown & Distance
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 24));
-        gc.fillText(String.format("MÉTRO DANS : 00:%05.2f", world.getTimeRemaining()), 25, 42);
-        gc.fillText(String.format("DISTANCE : %.0f m", world.getDistanceMeters()), WIDTH - 260, 42);
-
-        // Active Debuff Indicator
-        if (p.isConfused()) {
-            gc.setFill(Color.YELLOWGREEN);
-            gc.fillText("DEBUFF: ODEUR SUSPECTE (TOUCHES INVERSÉES !)", 25, 76);
-        } else if (p.isSlowed()) {
-            gc.setFill(Color.ORANGE);
-            gc.fillText("DEBUFF: RALENTI", 25, 76);
-        }
-
-        // Sarcastic Pop-up Banner
-        if (bannerTimer > 0 && !bannerText.isEmpty()) {
-            gc.setFill(Color.rgb(0, 0, 0, 0.7));
-            gc.fillRect(240, 95, 800, 44);
-            gc.setFill(Color.GOLD);
-            gc.setFont(Font.font("Consolas", FontWeight.BOLD, 17));
-            gc.fillText(bannerText, 260, 123);
-        }
-
-        // Game Over Receipt Overlay
-        if (world.isGameOver()) {
-            gc.setFill(Color.rgb(10, 10, 20, 0.85));
-            gc.fillRect(0, 0, WIDTH, HEIGHT);
-            gc.setFill(Color.CRIMSON);
-            gc.setFont(Font.font("Consolas", FontWeight.BOLD, 42));
-            gc.fillText("MÉTRO RATÉ — FIN DE SERVICE", 310, 270);
-
-            gc.setFill(Color.WHITE);
-            gc.setFont(Font.font("Consolas", 22));
-            gc.fillText(gameOverReason, 260, 330);
-            gc.fillText(String.format("Distance parcourue : %.0f mètres pour rien.", world.getDistanceMeters()), 360, 380);
-
-            gc.setFill(Color.GOLD);
-            gc.fillText("Appuie sur [R] pour souffrir à nouveau", 410, 460);
-        }
+        gameOverReason = reason;
     }
 
     public static void main(String[] args) {
