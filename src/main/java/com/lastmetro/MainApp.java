@@ -47,6 +47,7 @@ public class MainApp extends Application implements GameObserver {
 
     @Override
     public void start(Stage stage) {
+        renderer.loadAssets();
         Canvas canvas = new Canvas(WIDTH, HEIGHT);
         Pane root = new Pane(canvas);
         canvas.widthProperty().bind(root.widthProperty());

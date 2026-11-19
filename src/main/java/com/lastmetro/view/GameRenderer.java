@@ -19,7 +19,18 @@ public final class GameRenderer {
     private static final double[] SLIDING_BOB = {0, 1};
 
     private final AnimationPlayer playerAnimation = createPlayerAnimation();
+    private final java.util.Map<String, SpriteStrip> playerSprites = new java.util.HashMap<>();
     private double menuTime;
+
+    public void loadAssets() {
+        loadPlayerSprite("RUNNING", "/assets/sprites/commuter-run.png", 4);
+        loadPlayerSprite("JUMPING", "/assets/sprites/commuter-jump.png", 2);
+        loadPlayerSprite("SLIDING", "/assets/sprites/commuter-slide.png", 2);
+    }
+
+    private void loadPlayerSprite(String animation, String path, int frames) {
+        SpriteStrip.load(GameRenderer.class, path, frames).ifPresent(strip -> playerSprites.put(animation, strip));
+    }
 
     public void updateUi(double deltaTime) {
         if (Double.isFinite(deltaTime) && deltaTime > 0.0) menuTime += Math.min(deltaTime, 0.1);
@@ -203,7 +214,17 @@ public final class GameRenderer {
             default -> 0;
         };
         if (world.isInvulnerable() && (System.nanoTime() / 100_000_000L) % 2 == 0) gc.setGlobalAlpha(0.35);
-        gc.fillRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
+        SpriteStrip playerSprite = playerSprites.get(playerAnimation.getCurrentName());
+        if (playerSprite == null) {
+            gc.fillRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
+        } else {
+            playerSprite.draw(gc, playerAnimation.getCurrentFrame(), player.getX(), player.getY() + offset,
+                    player.getWidth(), player.getHeight());
+            if (player.isConfused() || player.isSlowed()) {
+                gc.setStroke(player.isConfused() ? Color.YELLOWGREEN : Color.ORANGE);
+                gc.strokeRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
+            }
+        }
         gc.setGlobalAlpha(1.0);
 
         gc.setFill(Color.WHITE);
