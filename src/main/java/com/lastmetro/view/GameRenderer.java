@@ -26,9 +26,15 @@ public final class GameRenderer {
     private SpriteStrip transitCards;
     private SpriteStrip heartSprite;
     private Image parisComposite;
+    private String pixelFontFamily = "Consolas";
     private double menuTime;
 
     public void loadAssets() {
+        var fontResource = GameRenderer.class.getResource("/fonts/PressStart2P-Regular.ttf");
+        if (fontResource != null) {
+            Font pixelFont = Font.loadFont(fontResource.toExternalForm(), 16);
+            if (pixelFont != null) pixelFontFamily = pixelFont.getFamily();
+        }
         loadParisComposite();
         String atlas = "/assets/sprites/commuter-atlas.png";
         loadPlayerSprite("RUNNING", atlas,
@@ -138,8 +144,8 @@ public final class GameRenderer {
     private void drawMenu(GraphicsContext gc) {
         drawMenuBackdrop(gc);
         gc.setFill(Color.web("#f2cc8f"));
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 52));
-        gc.fillText("DERNIÈRE RAME", 390, 190);
+        gc.setFont(Font.font(pixelFontFamily, FontWeight.BOLD, 34));
+        gc.fillText("LAST METRO", 440, 190);
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("Consolas", 22));
         gc.fillText("A Parisian sprint for the last métro", 390, 235);
@@ -180,7 +186,7 @@ public final class GameRenderer {
     private void drawSettings(GraphicsContext gc, String jumpKey, String slideKey, String bindingPrompt) {
         drawMenuBackdrop(gc);
         gc.setFill(Color.web("#f2cc8f"));
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 42));
+        gc.setFont(Font.font(pixelFontFamily, FontWeight.BOLD, 30));
         gc.fillText("CONTROLS & SETTINGS", 300, 180);
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("Consolas", 22));
@@ -209,7 +215,7 @@ public final class GameRenderer {
         gc.setStroke(Color.web("#f2cc8f"));
         gc.strokeRoundRect(360, y, 560, 66, 12, 12);
         gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 22));
+        gc.setFont(Font.font(pixelFontFamily, FontWeight.BOLD, 16));
         gc.fillText(label, 405, y + 42);
     }
 
@@ -351,7 +357,7 @@ public final class GameRenderer {
     private void drawPause(GraphicsContext gc, GameWorld world) {
         drawOverlayPanel(gc);
         gc.setFill(Color.GOLD);
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 44));
+        gc.setFont(Font.font(pixelFontFamily, FontWeight.BOLD, 28));
         gc.fillText("PAUSED", 530, 260);
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("Consolas", 20));
@@ -365,7 +371,7 @@ public final class GameRenderer {
         drawOverlayPanel(gc);
         String title = world.isPlayerWon() ? "YOU CAUGHT THE LAST METRO!" : "RUN OVER";
         gc.setFill(title.startsWith("YOU CAUGHT") ? Color.LIGHTGREEN : Color.GOLD);
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 38));
+        gc.setFont(Font.font(pixelFontFamily, FontWeight.BOLD, 25));
         gc.fillText(title, world.isPlayerWon() ? 250 : 510, 255);
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("Consolas", 20));

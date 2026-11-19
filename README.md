@@ -46,6 +46,7 @@ The first art checkpoint is in `src/main/resources/assets/`:
 - `sprites/commuter-atlas.png`: running, jumping, sliding, and confused poses.
 - `sprites/objects-atlas.png`: animated street hazards, Navigo cards, and heart icons.
 - `scenes/paris-composite.jpg`: the supplied Paris scene, cropped by the renderer to hide its board labels.
+- `fonts/PressStart2P-Regular.ttf`: pixel display lettering for menu and results headings (SIL Open Font License; see `fonts/OFL.txt`).
 
 The atlas images use transparent backgrounds and source-rectangle animation, so frames can have different sizes. If an image or frame cannot be loaded, the renderer falls back to simple shapes. See [the sprite guide](src/main/resources/assets/sprites/README.md) for the asset layout and replacement notes.
 
