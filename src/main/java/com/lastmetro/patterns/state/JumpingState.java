@@ -37,7 +37,9 @@ public class JumpingState implements PlayerState {
         if (player.isAtOrBelowGround()) {
             player.snapToGround();
             player.setVelocityY(0);
-            if (player.isSlideHeld()) {
+            if (player.launchBufferedJumpIfReady()) {
+                return;
+            } else if (player.isSlideHeld()) {
                 player.enterSlideHitbox();
                 player.setState(new SlidingState());
             } else {

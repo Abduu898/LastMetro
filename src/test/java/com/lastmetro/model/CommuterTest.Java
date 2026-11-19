@@ -52,6 +52,51 @@ class CommuterTest {
     }
 
     @Test
+    void jumpTappedJustBeforeLandingIsBufferedAndStartsAShortHop() {
+        player.onJumpPressed();
+        for (int frame = 0; frame < 35; frame++) player.update(1.0 / 60.0);
+        assertEquals("JUMPING", player.getCurrentState().getStateName());
+
+        player.onJumpReleased();
+        player.onJumpPressed();
+        player.onJumpReleased();
+        for (int frame = 0; frame < 6; frame++) player.update(1.0 / 60.0);
+
+        assertEquals("JUMPING", player.getCurrentState().getStateName());
+        assertTrue(player.getVelocityY() < 0.0);
+        assertTrue(player.getY() <= GROUND_Y - Commuter.STANDING_HEIGHT);
+    }
+
+    @Test
+    void repeatedKeyDownWhileJumpButtonIsHeldDoesNotQueueAnAutomaticSecondJump() {
+        player.onJumpPressed();
+        for (int frame = 0; frame < 35; frame++) player.update(1.0 / 60.0);
+
+        player.onJumpPressed(); // Operating systems may repeat key-down events while held.
+        for (int frame = 0; frame < 8; frame++) player.update(1.0 / 60.0);
+
+        assertEquals("RUNNING", player.getCurrentState().getStateName());
+    }
+
+    @Test
+    void releaseInputsClearsASlideAndCancelsAQueuedJump() {
+        player.onSlideChanged(true);
+        player.releaseInputs();
+        assertEquals("RUNNING", player.getCurrentState().getStateName());
+        assertFalse(player.isSlideHeld());
+
+        player.onJumpPressed();
+        for (int frame = 0; frame < 35; frame++) player.update(1.0 / 60.0);
+        player.onJumpReleased();
+        player.onJumpPressed();
+        player.releaseInputs();
+        for (int frame = 0; frame < 8; frame++) player.update(1.0 / 60.0);
+
+        assertEquals("RUNNING", player.getCurrentState().getStateName());
+        assertFalse(player.isSlideHeld());
+    }
+
+    @Test
     void slideAndJumpCancelSlide() {
         player.onSlideChanged(true);
         assertTrue(player.isSlideHeld());

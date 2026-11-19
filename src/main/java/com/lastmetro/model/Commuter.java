@@ -1,6 +1,7 @@
 package com.lastmetro.model;
 
 import com.lastmetro.patterns.state.PlayerState;
+import com.lastmetro.patterns.state.JumpingState;
 import com.lastmetro.patterns.state.RunningState;
 
 /**
@@ -12,10 +13,14 @@ public class Commuter extends Entity {
     public static final double JUMP_FORCE = -780.0;
     public static final double GRAVITY = 2200.0;
     public static final double FAST_FALL_SPEED = 1100.0;
+    public static final double JUMP_BUFFER_SECONDS = 0.12;
+    private static final double RELEASED_BUFFERED_JUMP_RATIO = 0.55;
 
     private final double groundY;
     private final double startX;
     private double velocityY = 0;
+    private double jumpBufferTimer = 0.0;
+    private boolean jumpButtonHeld = false;
     private boolean slideHeld = false;
     private PlayerState currentState;
 
@@ -35,6 +40,8 @@ public class Commuter extends Entity {
         this.height = STANDING_HEIGHT;
         this.y = groundY - STANDING_HEIGHT;
         this.velocityY = 0.0;
+        this.jumpBufferTimer = 0.0;
+        this.jumpButtonHeld = false;
         this.slideHeld = false;
         this.currentState = new RunningState();
         this.stenchTimer = 0.0;
@@ -45,6 +52,7 @@ public class Commuter extends Entity {
     public void update(double deltaTime) {
         if (stenchTimer > 0) stenchTimer = Math.max(0, stenchTimer - deltaTime);
         if (slowTimer > 0) slowTimer = Math.max(0, slowTimer - deltaTime);
+        if (jumpBufferTimer > 0) jumpBufferTimer = Math.max(0, jumpBufferTimer - deltaTime);
         currentState.update(this, deltaTime);
     }
 
@@ -52,7 +60,7 @@ public class Commuter extends Entity {
         if (isConfused()) {
             onSlideRaw(true);
         } else {
-            currentState.handleJumpPress(this);
+            jumpPressed();
         }
     }
 
@@ -60,14 +68,14 @@ public class Commuter extends Entity {
         if (isConfused()) {
             onSlideRaw(false);
         } else {
-            currentState.handleJumpRelease(this);
+            jumpReleased();
         }
     }
 
     public void onSlideChanged(boolean held) {
         if (isConfused()) {
-            if (held) currentState.handleJumpPress(this);
-            else currentState.handleJumpRelease(this);
+            if (held) jumpPressed();
+            else jumpReleased();
         } else {
             onSlideRaw(held);
         }
@@ -76,6 +84,41 @@ public class Commuter extends Entity {
     private void onSlideRaw(boolean held) {
         this.slideHeld = held;
         currentState.handleSlide(this, held);
+    }
+
+    private void jumpPressed() {
+        if (jumpButtonHeld) return;
+        boolean wasJumping = currentState.getStateName().equals("JUMPING");
+        jumpButtonHeld = true;
+        jumpBufferTimer = JUMP_BUFFER_SECONDS;
+        currentState.handleJumpPress(this);
+        if (!wasJumping && currentState.getStateName().equals("JUMPING")) jumpBufferTimer = 0.0;
+    }
+
+    private void jumpReleased() {
+        jumpButtonHeld = false;
+        currentState.handleJumpRelease(this);
+    }
+
+    /** Starts a buffered jump when the current arc lands. */
+    public boolean launchBufferedJumpIfReady() {
+        if (jumpBufferTimer <= 0.0) return false;
+        jumpBufferTimer = 0.0;
+        velocityY = JUMP_FORCE * (jumpButtonHeld ? 1.0 : RELEASED_BUFFERED_JUMP_RATIO);
+        currentState = new JumpingState();
+        return true;
+    }
+
+    /** Clears held inputs when pausing or when the game window loses focus. */
+    public void releaseInputs() {
+        if (jumpButtonHeld) currentState.handleJumpRelease(this);
+        jumpButtonHeld = false;
+        jumpBufferTimer = 0.0;
+        slideHeld = false;
+        if (currentState.getStateName().equals("SLIDING")) {
+            exitSlideHitbox();
+            currentState = new RunningState();
+        }
     }
 
     public void applyStenchDebuff(double duration) {

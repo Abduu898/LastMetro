@@ -62,6 +62,13 @@ public class MainApp extends Application implements GameObserver {
         });
         scene.setOnMouseClicked(event -> handleMouseClick(event.getX(), event.getY()));
 
+        stage.focusedProperty().addListener((observable, wasFocused, isFocused) -> {
+            if (!isFocused && world != null) {
+                world.getPlayer().releaseInputs();
+                simulationClock.reset();
+            }
+        });
+
         stage.setTitle("Last Métro — Dernière Rame");
         stage.setScene(scene);
         stage.setResizable(true);
@@ -211,7 +218,7 @@ public class MainApp extends Application implements GameObserver {
 
         if (code == KeyCode.P || code == KeyCode.ESCAPE) {
             transitionTo(() -> {
-                world.getPlayer().onSlideChanged(false);
+                world.getPlayer().releaseInputs();
                 screen = GameScreen.PAUSED;
             });
         } else if (isJumpKey(code)) {
