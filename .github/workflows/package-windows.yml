@@ -1,0 +1,32 @@
+name: Package Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build Windows app image
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+
+      - name: Save downloadable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastMetro-Windows
+          path: target/dist/LastMetro/
+          if-no-files-found: error
+          retention-days: 14

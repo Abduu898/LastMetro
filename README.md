@@ -28,6 +28,16 @@ mvn test
 
 The same test command runs in GitHub Actions on pushes and pull requests to `main` or `master`.
 
+## Create a Windows build
+
+Install **JDK 21** and **Apache Maven**, then run this in PowerShell:
+
+```powershell
+./scripts/package-windows.ps1
+```
+
+The self-contained app image is created in `target/dist/LastMetro/`. Start it with `LastMetro.exe`; players do not need Maven or a separate Java installation. Each push to `main` or `master` also creates a downloadable `LastMetro-Windows` artifact in the GitHub Actions run. The artifact is a Windows app folder, not an installer, and is currently built for Windows only.
+
 ## Add the commuter art later
 
 Optional transparent PNG sprite strips go in `src/main/resources/assets/sprites/`:
