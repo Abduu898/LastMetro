@@ -22,4 +22,4 @@ jobs:
           cache: maven
 
       - name: Run Unit Tests & Generate JaCoCo Report
-        run: mvn -B test jacoco:report
+        run: xvfb-run -a mvn -B test jacoco:report

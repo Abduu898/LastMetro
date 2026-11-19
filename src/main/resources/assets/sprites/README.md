@@ -1,11 +1,10 @@
-# Optional character sprite strips
+# Sprite assets
 
-The game looks for these optional classpath images:
+The renderer loads these images from the classpath:
 
-- `commuter-run.png`: 4 frames in one horizontal row, looped while running.
-- `commuter-jump.png`: 2 frames in one horizontal row, used while airborne.
-- `commuter-slide.png`: 2 frames in one horizontal row, looped while sliding.
+- `commuter-atlas.png`: commuter running, jumping, sliding, and confused poses.
+- `objects-atlas.png`: dog-poop, e-scooter, pigeon, Navigo-card, and heart sprites.
 
-Use transparent PNGs. Every frame in a strip must have the same width and height. The game scales each frame to the commuter's gameplay size, so you can draw at a larger pixel resolution. If a file is missing, unreadable, or has an incompatible width, the colored placeholder remains in use.
+The current images are cleaned copies of the supplied JPG sheets. The checkerboard was removed to create alpha transparency; the originals were left untouched. The renderer selects frames by source rectangles, so sprites in the atlases do not need equal-sized cells. Replace an atlas with a transparent PNG at the same path to update the art without changing the game logic. If an image or frame is missing or invalid, the game uses its simple fallback drawing.
 
-Add the images in this folder with the exact filenames above. No code changes are needed for these three character animations.
+The Paris composite is currently drawn as two static crops to hide its board labels. It is not yet a seamless, scrolling parallax background. For that, export the sky/tower and foreground buildings as separate PNG layers. The four-part route image is a design reference for later route transitions, not a runtime asset.

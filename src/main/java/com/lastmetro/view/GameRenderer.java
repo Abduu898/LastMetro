@@ -6,6 +6,8 @@ import com.lastmetro.model.Commuter;
 import com.lastmetro.model.GameWorld;
 import com.lastmetro.model.Hazard;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.geometry.Rectangle2D;
+import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -20,16 +22,59 @@ public final class GameRenderer {
 
     private final AnimationPlayer playerAnimation = createPlayerAnimation();
     private final java.util.Map<String, SpriteStrip> playerSprites = new java.util.HashMap<>();
+    private final java.util.Map<String, SpriteStrip> hazardSprites = new java.util.HashMap<>();
+    private SpriteStrip transitCards;
+    private SpriteStrip heartSprite;
+    private Image parisComposite;
     private double menuTime;
 
     public void loadAssets() {
-        loadPlayerSprite("RUNNING", "/assets/sprites/commuter-run.png", 4);
-        loadPlayerSprite("JUMPING", "/assets/sprites/commuter-jump.png", 2);
-        loadPlayerSprite("SLIDING", "/assets/sprites/commuter-slide.png", 2);
+        loadParisComposite();
+        String atlas = "/assets/sprites/commuter-atlas.png";
+        loadPlayerSprite("RUNNING", atlas,
+                new Rectangle2D(65, 34, 181, 208), new Rectangle2D(334, 34, 186, 208),
+                new Rectangle2D(631, 34, 177, 208), new Rectangle2D(887, 34, 182, 208));
+        loadPlayerSprite("JUMPING", atlas,
+                new Rectangle2D(71, 257, 162, 235), new Rectangle2D(355, 257, 169, 235));
+        loadPlayerSprite("SLIDING", atlas,
+                new Rectangle2D(78, 522, 188, 151), new Rectangle2D(397, 522, 229, 151));
+        loadPlayerSprite("CONFUSED", atlas,
+                new Rectangle2D(75, 692, 206, 228), new Rectangle2D(355, 692, 209, 228));
+
+        String objects = "/assets/sprites/objects-atlas.png";
+        hazardSprites.put("DOG_POOP", loadFrames(objects,
+                new Rectangle2D(90, 50, 61, 109), new Rectangle2D(257, 50, 71, 109),
+                new Rectangle2D(453, 56, 60, 103)));
+        hazardSprites.put("E_SCOOTER", loadFrames(objects,
+                new Rectangle2D(65, 225, 214, 133), new Rectangle2D(325, 225, 221, 133)));
+        hazardSprites.put("PIGEON", loadFrames(objects,
+                new Rectangle2D(91, 423, 134, 119), new Rectangle2D(290, 423, 144, 115),
+                new Rectangle2D(533, 453, 114, 85)));
+        transitCards = loadFrames(objects,
+                new Rectangle2D(63, 614, 187, 115), new Rectangle2D(245, 614, 220, 117));
+        heartSprite = loadFrames(objects, new Rectangle2D(355, 842, 51, 47));
     }
 
-    private void loadPlayerSprite(String animation, String path, int frames) {
-        SpriteStrip.load(GameRenderer.class, path, frames).ifPresent(strip -> playerSprites.put(animation, strip));
+    private void loadParisComposite() {
+        var resource = GameRenderer.class.getResource("/assets/scenes/paris-composite.jpg");
+        if (resource == null) return;
+        try {
+            Image image = new Image(resource.toExternalForm(), false);
+            if (!image.isError() && image.getWidth() >= 2700 && image.getHeight() >= 1500) {
+                parisComposite = image;
+            }
+        } catch (RuntimeException ignored) {
+            // Keep the simple background when the optional scene art cannot be loaded.
+        }
+    }
+
+    private void loadPlayerSprite(String animation, String path, Rectangle2D... frames) {
+        SpriteStrip.loadFrames(GameRenderer.class, path, frames)
+                .ifPresent(strip -> playerSprites.put(animation, strip));
+    }
+
+    private SpriteStrip loadFrames(String path, Rectangle2D... frames) {
+        return SpriteStrip.loadFrames(GameRenderer.class, path, frames).orElse(null);
     }
 
     public void updateUi(double deltaTime) {
@@ -38,6 +83,7 @@ public final class GameRenderer {
 
     public void update(GameWorld world, double deltaTime) {
         String state = world.getPlayer().getCurrentState().getStateName();
+        if (state.equals("RUNNING") && world.getPlayer().isConfused()) state = "CONFUSED";
         if (!state.equals(playerAnimation.getCurrentName())) playerAnimation.play(state);
         playerAnimation.update(deltaTime);
     }
@@ -73,6 +119,7 @@ public final class GameRenderer {
         animation.add("RUNNING", new AnimationClip(4, 0.12, true));
         animation.add("JUMPING", new AnimationClip(2, 0.14, false));
         animation.add("SLIDING", new AnimationClip(2, 0.18, true));
+        animation.add("CONFUSED", new AnimationClip(2, 0.18, true));
         return animation;
     }
 
@@ -80,6 +127,10 @@ public final class GameRenderer {
         gc.setFill(Color.web("#1a1a2e"));
         gc.fillRect(0, 0, WIDTH, HEIGHT);
         if (screen == GameScreen.MENU || screen == GameScreen.HOW_TO_PLAY) return;
+        if (parisComposite != null) {
+            gc.drawImage(parisComposite, 50, 110, 2652, 486, 0, 0, WIDTH, 235);
+            gc.drawImage(parisComposite, 50, 768, 2652, 728, 0, 230, WIDTH, GROUND_Y - 230);
+        }
         gc.setFill(Color.web("#4a4e69"));
         gc.fillRect(0, GROUND_Y, WIDTH, HEIGHT - GROUND_Y);
     }
@@ -172,11 +223,12 @@ public final class GameRenderer {
         gc.fillText(slideKey + "     Slide", 370, 330);
         gc.fillText("P / ESC              Pause", 370, 380);
         gc.fillText("Avoid hazards. You have three hearts.", 370, 450);
-        gc.fillText("Catch the Metro: reach 500 m before time runs out.", 370, 490);
-        gc.fillText("Endless Commute: survive and beat your distance.", 370, 530);
+        gc.fillText("Collect Navigo cards for bonus points.", 370, 474);
+        gc.fillText("Catch the Metro: reach 500 m before time runs out.", 370, 500);
+        gc.fillText("Endless Commute: survive and beat your distance.", 370, 526);
         gc.setFill(Color.LIGHTGRAY);
         gc.setFont(Font.font("Consolas", 17));
-        gc.fillText("Press ENTER or ESC, or click below", 430, 565);
+        gc.fillText("Press ENTER or ESC, or click below", 430, 556);
         drawButton(gc, 470, 580, 340, "BACK TO MENU");
     }
 
@@ -184,19 +236,39 @@ public final class GameRenderer {
                           double bannerTimer, int endlessHighScore) {
         if (world == null) return;
         for (Hazard hazard : world.getHazards()) {
-            switch (hazard.getType()) {
-                case "DOG_POOP" -> gc.setFill(Color.SADDLEBROWN);
-                case "E_SCOOTER" -> gc.setFill(Color.LIMEGREEN);
-                case "PIGEON" -> gc.setFill(Color.LIGHTSLATEGRAY);
-                default -> gc.setFill(Color.CRIMSON);
+            SpriteStrip sprite = hazardSprites.get(hazard.getType());
+            if (sprite != null) {
+                int frame = (int) (Math.abs(menuTime * 8.0 + hazard.getX() / 50.0) % sprite.getFrameCount());
+                if (hazard.getType().equals("DOG_POOP")) {
+                    sprite.drawFitted(gc, frame, hazard.getX() - 2, hazard.getY() - 22,
+                            hazard.getWidth() + 4, hazard.getHeight() + 25);
+                } else if (hazard.getType().equals("PIGEON")) {
+                    sprite.drawFitted(gc, frame, hazard.getX() - 5, hazard.getY() - 4,
+                            hazard.getWidth() + 10, hazard.getHeight() + 8);
+                } else {
+                    sprite.drawFitted(gc, frame, hazard.getX() - 3, hazard.getY() - 4,
+                            hazard.getWidth() + 6, hazard.getHeight() + 8);
+                }
+            } else {
+                gc.setFill(switch (hazard.getType()) {
+                    case "DOG_POOP" -> Color.SADDLEBROWN;
+                    case "E_SCOOTER" -> Color.LIMEGREEN;
+                    case "PIGEON" -> Color.LIGHTSLATEGRAY;
+                    default -> Color.CRIMSON;
+                });
+                gc.fillRect(hazard.getX(), hazard.getY(), hazard.getWidth(), hazard.getHeight());
             }
-            gc.fillRect(hazard.getX(), hazard.getY(), hazard.getWidth(), hazard.getHeight());
         }
         for (var ticket : world.getTickets()) {
-            gc.setFill(Color.GOLD);
-            gc.fillRoundRect(ticket.getX(), ticket.getY(), ticket.getWidth(), ticket.getHeight(), 5, 5);
-            gc.setFill(Color.web("#7a4b12"));
-            gc.fillText("T", ticket.getX() + 7, ticket.getY() + 20);
+            if (transitCards != null) {
+                int frame = (int) (menuTime * 3.0) % transitCards.getFrameCount();
+                transitCards.drawFitted(gc, frame, ticket.getX() - 13, ticket.getY() - 4, 50, 38);
+            } else {
+                gc.setFill(Color.GOLD);
+                gc.fillRoundRect(ticket.getX(), ticket.getY(), ticket.getWidth(), ticket.getHeight(), 5, 5);
+                gc.setFill(Color.web("#7a4b12"));
+                gc.fillText("T", ticket.getX() + 7, ticket.getY() + 20);
+            }
         }
 
         if (world.isFinaleActive()) drawMetro(gc, world);
@@ -213,8 +285,8 @@ public final class GameRenderer {
         if (playerSprite == null) {
             gc.fillRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
         } else {
-            playerSprite.draw(gc, playerAnimation.getCurrentFrame(), player.getX(), player.getY() + offset,
-                    player.getWidth(), player.getHeight());
+            playerSprite.drawFitted(gc, playerAnimation.getCurrentFrame(), player.getX() - 10,
+                    player.getY() + offset, player.getWidth() + 20, player.getHeight());
             if (player.isConfused() || player.isSlowed()) {
                 gc.setStroke(player.isConfused() ? Color.YELLOWGREEN : Color.ORANGE);
                 gc.strokeRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
@@ -235,8 +307,14 @@ public final class GameRenderer {
             gc.setFont(Font.font("Consolas", FontWeight.BOLD, 18));
             gc.fillText(String.format("BEST: %d", endlessHighScore), WIDTH - 330, 76);
         }
-        gc.setFill(Color.CRIMSON);
-        gc.fillText("♥ ".repeat(world.getHearts()), 25, 82);
+        if (heartSprite == null) {
+            gc.setFill(Color.CRIMSON);
+            gc.fillText("♥ ".repeat(world.getHearts()), 25, 82);
+        } else {
+            for (int heart = 0; heart < world.getHearts(); heart++) {
+                heartSprite.drawFitted(gc, 0, 25 + heart * 34, 55, 28, 32);
+            }
+        }
         gc.setFill(Color.GOLD);
         gc.setFont(Font.font("Consolas", FontWeight.BOLD, 18));
         gc.fillText("TICKETS: " + world.getTicketsCollected(), 170, 78);
