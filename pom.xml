@@ -76,6 +76,11 @@
                     <execution>
                         <id>report</id>
                         <phase>test</phase>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/lastmetro/MainApp*</exclude>
+                            </excludes>
+                        </configuration>
                         <goals>
                             <goal>report</goal>
                         </goals>
