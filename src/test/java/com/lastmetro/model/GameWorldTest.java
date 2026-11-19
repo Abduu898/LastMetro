@@ -54,6 +54,23 @@ class GameWorldTest {
     }
 
     @Test
+    void hazardCadenceTightensGraduallyAndStopsAtAFairMinimumInBothModes() {
+        assertEquals(GameWorld.INITIAL_HAZARD_INTERVAL_SECONDS,
+                GameWorld.hazardSpawnInterval(Mode.CATCH_THE_METRO, GameWorld.INITIAL_TIME, 0));
+        assertEquals(GameWorld.MIN_HAZARD_INTERVAL_SECONDS,
+                GameWorld.hazardSpawnInterval(Mode.CATCH_THE_METRO, 0, 0));
+
+        double earlyEndless = GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 0);
+        double midEndless = GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 500);
+        double cappedEndless = GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 1000);
+        assertTrue(earlyEndless > midEndless);
+        assertTrue(midEndless > cappedEndless);
+        assertEquals(GameWorld.MIN_HAZARD_INTERVAL_SECONDS, cappedEndless);
+        assertEquals(cappedEndless,
+                GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 5000));
+    }
+
+    @Test
     void collectingTicketAddsBonusPointsAndResetClearsIt() {
         GameWorld world = new GameWorld(1280, 580, GameWorld.Mode.ENDLESS);
         world.getTickets().add(new Ticket(150, 520));

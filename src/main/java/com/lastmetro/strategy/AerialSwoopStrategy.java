@@ -13,7 +13,8 @@ public class AerialSwoopStrategy implements MovementStrategy {
     @Override
     public void move(Hazard hazard, double baseScrollSpeed, double deltaTime) {
         elapsed += deltaTime;
-        hazard.setX(hazard.getX() - (baseScrollSpeed * 1.25) * deltaTime);
+        // Keep the same horizontal pace as the street; only the swoop varies.
+        hazard.setX(hazard.getX() - baseScrollSpeed * deltaTime);
         hazard.setY(baseY + Math.sin(elapsed * 8.0) * 10.0);
     }
 }

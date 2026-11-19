@@ -16,6 +16,9 @@ public class GameWorld {
     public static final double BASE_SCROLL_SPEED = 460.0;
     public static final double NORMAL_GOAL_METERS = 500.0;
     public static final int STARTING_HEARTS = 3;
+    public static final double INITIAL_HAZARD_INTERVAL_SECONDS = 1.65;
+    public static final double MIN_HAZARD_INTERVAL_SECONDS = 1.10;
+    private static final double INITIAL_TICKET_INTERVAL_SECONDS = 3.0;
 
     public enum Mode { CATCH_THE_METRO, ENDLESS }
 
@@ -29,8 +32,8 @@ public class GameWorld {
     private final List<GameObserver> observers = new ArrayList<>();
 
     private double timeRemaining = INITIAL_TIME;
-    private double spawnCooldown = 1.2;
-    private double ticketSpawnCooldown = 3.0;
+    private double spawnCooldown = INITIAL_HAZARD_INTERVAL_SECONDS;
+    private double ticketSpawnCooldown = INITIAL_TICKET_INTERVAL_SECONDS;
     private double distanceMeters = 0.0;
     private boolean finaleActive = false;
     private boolean gameOver = false;
@@ -108,20 +111,17 @@ public class GameWorld {
 
         player.update(deltaTime);
 
-        // Spawn hazards faster as the clock approaches 00:00
+        // Tighten obstacle spacing gradually as each mode progresses.
         spawnCooldown -= deltaTime;
         if (spawnCooldown <= 0) {
             hazards.add(hazardFactory.createRandomHazard(screenWidth + 60, groundY));
-            double urgency = mode == Mode.ENDLESS
-                    ? Math.min(distanceMeters / 1000.0, 1.0)
-                    : 1.0 - (timeRemaining / INITIAL_TIME);
-            spawnCooldown = Math.max(0.75, 1.65 - (urgency * 0.75));
+            spawnCooldown = hazardSpawnInterval(mode, timeRemaining, distanceMeters);
         }
 
         ticketSpawnCooldown -= deltaTime;
         if (ticketSpawnCooldown <= 0.0) {
             tickets.add(new Ticket(screenWidth + 60, groundY - Commuter.STANDING_HEIGHT - 45));
-            ticketSpawnCooldown = 3.0;
+            ticketSpawnCooldown = INITIAL_TICKET_INTERVAL_SECONDS;
         }
 
         // Move hazards & check AABB collisions
@@ -164,6 +164,15 @@ public class GameWorld {
         }
     }
 
+    static double hazardSpawnInterval(Mode mode, double timeRemaining, double distanceMeters) {
+        double urgency = mode == Mode.ENDLESS
+                ? distanceMeters / 1000.0
+                : 1.0 - (timeRemaining / INITIAL_TIME);
+        urgency = Math.max(0.0, Math.min(1.0, urgency));
+        return INITIAL_HAZARD_INTERVAL_SECONDS
+                - urgency * (INITIAL_HAZARD_INTERVAL_SECONDS - MIN_HAZARD_INTERVAL_SECONDS);
+    }
+
     private void startFinale() {
         finaleActive = true;
         hazards.clear();
@@ -197,8 +206,8 @@ public class GameWorld {
     public void reset() {
         hazards.clear();
         timeRemaining = INITIAL_TIME;
-        spawnCooldown = 1.0;
-        ticketSpawnCooldown = 3.0;
+        spawnCooldown = INITIAL_HAZARD_INTERVAL_SECONDS;
+        ticketSpawnCooldown = INITIAL_TICKET_INTERVAL_SECONDS;
         distanceMeters = 0.0;
         finaleActive = false;
         gameOver = false;
