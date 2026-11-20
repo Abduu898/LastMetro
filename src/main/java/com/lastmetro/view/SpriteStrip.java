@@ -81,5 +81,18 @@ public final class SpriteStrip {
                 x + (width - drawWidth) / 2.0, y + (height - drawHeight) / 2.0, drawWidth, drawHeight);
     }
 
+    public void drawFittedMirrored(GraphicsContext gc, int frame, double x, double y,
+                                   double width, double height) {
+        int safeFrame = Math.max(0, Math.min(frameCount - 1, frame));
+        Rectangle2D source = frames.get(safeFrame);
+        double scale = Math.min(width / source.getWidth(), height / source.getHeight());
+        double drawWidth = source.getWidth() * scale;
+        double drawHeight = source.getHeight() * scale;
+        double drawX = x + (width - drawWidth) / 2.0;
+        double drawY = y + (height - drawHeight) / 2.0;
+        gc.drawImage(image, source.getMinX(), source.getMinY(), source.getWidth(), source.getHeight(),
+                drawX + drawWidth, drawY, -drawWidth, drawHeight);
+    }
+
     public int getFrameCount() { return frameCount; }
 }

@@ -434,13 +434,13 @@ public final class GameRenderer {
             if (sprite != null) {
                 int frame = (int) (Math.abs(menuTime * 8.0 + hazard.getX() / 50.0) % sprite.getFrameCount());
                 if (hazard.getType().equals("DOG_POOP")) {
-                    sprite.drawFitted(gc, frame, hazard.getX() - 2, hazard.getY() - 22,
+                    sprite.drawFittedMirrored(gc, frame, hazard.getX() - 2, hazard.getY() - 22,
                             hazard.getWidth() + 4, hazard.getHeight() + 25);
                 } else if (hazard.getType().equals("PIGEON")) {
-                    sprite.drawFitted(gc, frame, hazard.getX() - 5, hazard.getY() - 4,
+                    sprite.drawFittedMirrored(gc, frame, hazard.getX() - 5, hazard.getY() - 4,
                             hazard.getWidth() + 10, hazard.getHeight() + 8);
                 } else {
-                    sprite.drawFitted(gc, frame, hazard.getX() - 3, hazard.getY() - 4,
+                    sprite.drawFittedMirrored(gc, frame, hazard.getX() - 3, hazard.getY() - 4,
                             hazard.getWidth() + 6, hazard.getHeight() + 8);
                 }
             } else {

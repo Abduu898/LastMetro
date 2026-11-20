@@ -1,60 +1,129 @@
 # Last Métro — Dernière Rame
 
-A JavaFX endless-runner about a Parisian commuter trying to catch the last métro. The current build combines the game engine with the first supplied character, hazard, collectible, and Paris-scene art.
+> Sprint through a pixel-art Paris at 1:14 AM and catch the final métro before it disappears.
 
-## Run the game
+**Last Métro** is a JavaFX arcade runner with two game modes, configurable controls, animated sprites, and a three-layer Paris street scene.
 
-Install **JDK 21** and **Apache Maven**, then open a terminal in this folder and run:
+## Game modes
 
-```sh
+### Catch the Last Métro
+
+Cover 500 meters before the 45-second timer expires. The run begins with three hearts and ends with the arriving-train sequence when the goal is reached.
+
+### Endless Commute
+
+Run as far as possible, chase a saved high score, and survive a street that becomes faster as the distance increases.
+
+Collect Navigo cards for points and avoid dog poop, e-scooters, and swooping pigeons. Hazard sprites face toward the runner.
+
+## Controls
+
+| Action | Default | Notes |
+|---|---|---|
+| Jump | `Space` | Rebindable |
+| Slide | `Down` | Rebindable |
+| Pause | `P` or `Esc` | Reserved in control settings |
+| Menu | `1`, `2`, `H`, `O` | Catch mode, Endless mode, help, or settings |
+| Retry | `R` | Available on the results screen |
+| Return | `Esc` or `Enter` | Available from most secondary screens |
+
+Jump and slide bindings can be changed from **Controls & Settings**. Menus and results also support mouse input.
+
+## Requirements
+
+- JDK 21
+- Apache Maven 3.9+
+- Windows, macOS, or Linux with a graphical desktop
+
+## Run
+
+```bash
 mvn javafx:run
 ```
 
-The window can be resized; the 1280 × 720 game view keeps its proportions and adds letterboxing when needed.
+The game opens in a 1280 × 720 logical viewport and scales proportionally when the window is resized.
 
-## Play
+## Test
 
-- **Catch the Last Metro**: cover 500 m before the 45-second service timer expires, then catch the arriving train. You start with three hearts.
-- **Endless Commute**: survive as long as possible and set a distance record. The street speeds up as you travel farther.
-- Avoid street hazards, collect Navigo cards for bonus points, and pause or retry from the in-game screens.
-
-The main menu accepts `1` for Catch the Last Metro, `2` for Endless, `H` for How to Play, and `O` for Controls & Settings. Jump and Slide can be rebound there. By default, **Space** jumps, **Down** slides, and **P** or **Esc** pauses. The help, pause, and results screens also accept clicks.
-
-## Build and verify
-
-```sh
+```bash
 mvn test
 ```
 
-The same test command runs in GitHub Actions on pushes and pull requests to `main` or `master`.
-On Linux systems without a desktop session, run `xvfb-run -a mvn test` so JavaFX can load and inspect the image assets.
+The JUnit 5 suite and JaCoCo report run in CI for pushes and pull requests to `main` or `master`.
+
+On a Linux system without a desktop session:
+
+```bash
+xvfb-run -a mvn test
+```
 
 ## Create a Windows build
 
-Install **JDK 21** and **Apache Maven**, then run this in PowerShell:
+With JDK 21 and Maven installed, run from PowerShell:
 
 ```powershell
 ./scripts/package-windows.ps1
 ```
 
-The self-contained app image is created in `target/dist/LastMetro/`. Start it with `LastMetro.exe`; players do not need Maven or a separate Java installation. Each push to `main` or `master` also creates a downloadable `LastMetro-Windows` artifact in the GitHub Actions run. The artifact is a Windows app folder, not an installer, and is currently built for Windows only.
+The self-contained application is written to `target/dist/LastMetro/`:
 
-## Art assets
+```text
+LastMetro.exe
+runtime/
+```
 
-The first art checkpoint is in `src/main/resources/assets/`:
+Players do not need Maven or a separate Java installation. GitHub Actions also publishes a `LastMetro-Windows` artifact for Windows runners.
 
-- `sprites/commuter-atlas.png`: running, jumping, sliding, and confused poses.
-- `sprites/objects-atlas.png`: animated street hazards, Navigo cards, and heart icons.
-- `scenes/paris-street-background.png`: clean full-screen Paris street artwork used behind gameplay.
-- `scenes/paris-composite.jpg` and `scenes/paris-foreground.png`: original concept-board source and an earlier parallax experiment.
-- `fonts/PressStart2P-Regular.ttf`: pixel display lettering for menu and results headings (SIL Open Font License; see `fonts/OFL.txt`).
+## Asset pipeline
 
-The atlas images use transparent backgrounds and source-rectangle animation, so frames can have different sizes. If an image or frame cannot be loaded, the renderer falls back to simple shapes. See [the sprite guide](src/main/resources/assets/sprites/README.md) for the asset layout and replacement notes.
+Clean the raw Part 1 backgrounds with Pillow:
+
+```bash
+python3 clean_part1.py
+```
+
+This creates four RGBA PNGs in `src/main/resources/assets/backgrounds/`:
+
+- `part1_far_bg.png`
+- `part1_mid_buildings_A.png`
+- `part1_mid_buildings_B.png`
+- `part1_front_walkway.png`
+
+The middle pair receives top-down sky removal, checkerboard fringe dilation, and horizontal seam feathering. The walkway receives magenta keying and edge despill cleanup.
+
+## Project structure
+
+```text
+src/main/java/com/lastmetro/
+├── MainApp.java              JavaFX entry point and input handling
+├── model/                    Pure-Java game simulation
+├── animation/                Transitions and frame animation
+├── persistence/              High scores and control settings
+├── patterns/                 State, strategy, factory, and observer patterns
+└── view/                     Canvas rendering and sprite strips
+
+src/main/resources/
+├── assets/backgrounds/       Cleaned Part 1 parallax layers
+├── assets/scenes/            Earlier scene assets
+├── assets/sprites/           Commuter and hazard atlases
+└── fonts/                    Press Start 2P font
+
+src/test/java/                JUnit 5 test suite
+```
+
+The main scene renderer uses:
+
+- Far sky at 10% camera speed
+- Alternating buildings at 35% camera speed
+- Walkway, curb, and railing at full camera speed
+
+See [the sprite guide](src/main/resources/assets/sprites/README.md) for atlas layout and replacement notes.
 
 ## Saved data
 
-The Endless best score is saved in `.lastmetro-highscore` under the user's home folder. Control bindings are saved under `.lastmetro/settings.properties` in the same folder.
+- Endless best score: `~/.lastmetro-highscore`
+- Control bindings: `~/.lastmetro/settings.properties`
 
-## Current scope
+## Asset fallback
 
-This is an early playable build, not a finished release. It has two game modes, one route, keyboard controls, mouse-accessible menus, and the first full-screen Paris street scene. The metro bonus section shown in the reference clip, seamless production background art, more character and hazard animation, audio, localization, and installer packaging are later checkpoints.
+The renderer uses image assets when they load successfully and falls back to simple JavaFX shapes if an asset or sprite frame is unavailable. This keeps the game playable while scene art is being replaced or expanded.
