@@ -45,7 +45,8 @@ The first art checkpoint is in `src/main/resources/assets/`:
 
 - `sprites/commuter-atlas.png`: running, jumping, sliding, and confused poses.
 - `sprites/objects-atlas.png`: animated street hazards, Navigo cards, and heart icons.
-- `scenes/paris-composite.jpg`: the supplied Paris scene, cropped by the renderer to hide its board labels.
+- `scenes/paris-street-background.png`: clean full-screen Paris street artwork used behind gameplay.
+- `scenes/paris-composite.jpg` and `scenes/paris-foreground.png`: original concept-board source and an earlier parallax experiment.
 - `fonts/PressStart2P-Regular.ttf`: pixel display lettering for menu and results headings (SIL Open Font License; see `fonts/OFL.txt`).
 
 The atlas images use transparent backgrounds and source-rectangle animation, so frames can have different sizes. If an image or frame cannot be loaded, the renderer falls back to simple shapes. See [the sprite guide](src/main/resources/assets/sprites/README.md) for the asset layout and replacement notes.
@@ -56,4 +57,4 @@ The Endless best score is saved in `.lastmetro-highscore` under the user's home 
 
 ## Current scope
 
-This is an early playable build, not a finished release. It has two game modes, one route, keyboard controls, mouse-accessible menus, a first pass of supplied art, and no audio yet. Separate parallax layers, route transitions, more character and hazard animation, audio, localization, and installer packaging are later checkpoints.
+This is an early playable build, not a finished release. It has two game modes, one route, keyboard controls, mouse-accessible menus, and the first full-screen Paris street scene. The metro bonus section shown in the reference clip, seamless production background art, more character and hazard animation, audio, localization, and installer packaging are later checkpoints.

@@ -9,6 +9,9 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
@@ -17,6 +20,7 @@ public final class GameRenderer {
     private static final double WIDTH = 1280;
     private static final double HEIGHT = 720;
     private static final double GROUND_Y = 580;
+    private static final double CITY_SCROLL_PER_METER = 2.1;
     private static final double[] RUNNING_BOB = {0, -2, -3, -2};
     private static final double[] SLIDING_BOB = {0, 1};
 
@@ -26,6 +30,8 @@ public final class GameRenderer {
     private SpriteStrip transitCards;
     private SpriteStrip heartSprite;
     private Image parisComposite;
+    private Image parisForeground;
+    private Image parisStreetBackground;
     private String pixelFontFamily = "Consolas";
     private double menuTime;
 
@@ -36,6 +42,8 @@ public final class GameRenderer {
             if (pixelFont != null) pixelFontFamily = pixelFont.getFamily();
         }
         loadParisComposite();
+        loadParisForeground();
+        loadParisStreetBackground();
         String atlas = "/assets/sprites/commuter-atlas.png";
         loadPlayerSprite("RUNNING", atlas,
                 new Rectangle2D(65, 34, 181, 208), new Rectangle2D(334, 34, 186, 208),
@@ -74,6 +82,24 @@ public final class GameRenderer {
         }
     }
 
+    private void loadParisForeground() {
+        var resource = GameRenderer.class.getResource("/assets/scenes/paris-foreground.png");
+        if (resource == null) return;
+        Image image = new Image(resource.toExternalForm(), false);
+        if (!image.isError() && image.getWidth() >= 2600 && image.getHeight() >= 700) {
+            parisForeground = image;
+        }
+    }
+
+    private void loadParisStreetBackground() {
+        var resource = GameRenderer.class.getResource("/assets/scenes/paris-street-background.png");
+        if (resource == null) return;
+        Image image = new Image(resource.toExternalForm(), false);
+        if (!image.isError() && image.getWidth() >= 1200 && image.getHeight() >= 650) {
+            parisStreetBackground = image;
+        }
+    }
+
     private void loadPlayerSprite(String animation, String path, Rectangle2D... frames) {
         SpriteStrip.loadFrames(GameRenderer.class, path, frames)
                 .ifPresent(strip -> playerSprites.put(animation, strip));
@@ -103,7 +129,7 @@ public final class GameRenderer {
                        String bannerText, double bannerTimer, String gameOverReason,
                        int endlessHighScore, String jumpKey, String slideKey,
                        String bindingPrompt, double transitionAlpha) {
-        drawBackground(gc, screen);
+        drawBackground(gc, screen, world);
         switch (screen) {
             case MENU -> drawMenu(gc);
             case HOW_TO_PLAY -> drawHowToPlay(gc, jumpKey, slideKey);
@@ -129,16 +155,104 @@ public final class GameRenderer {
         return animation;
     }
 
-    private void drawBackground(GraphicsContext gc, GameScreen screen) {
+    private void drawBackground(GraphicsContext gc, GameScreen screen, GameWorld world) {
+        if (parisStreetBackground != null) {
+            gc.drawImage(parisStreetBackground, 0, 0, WIDTH, HEIGHT);
+            return;
+        }
         gc.setFill(Color.web("#1a1a2e"));
         gc.fillRect(0, 0, WIDTH, HEIGHT);
-        if (screen == GameScreen.MENU || screen == GameScreen.HOW_TO_PLAY) return;
+        double distance = world == null ? 0 : world.getDistanceMeters();
+        double drift = Math.sin(menuTime * 0.22 + distance * 0.004);
+        gc.setFill(new LinearGradient(0, 190, 0, HEIGHT, false, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.web("#88718a")),
+                new Stop(0.52, Color.web("#62536d")),
+                new Stop(1, Color.web("#403a4b"))));
+        gc.fillRect(0, 190, WIDTH, HEIGHT - 190);
         if (parisComposite != null) {
-            gc.drawImage(parisComposite, 50, 110, 2652, 486, 0, 0, WIDTH, 235);
-            gc.drawImage(parisComposite, 50, 768, 2652, 728, 0, 230, WIDTH, GROUND_Y - 230);
+            gc.drawImage(parisComposite, 50, 110, 2652, 486,
+                    -20 + drift * 20, 0, WIDTH + 40, 242);
+            gc.setFill(new LinearGradient(0, 198, 0, 266, false, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.TRANSPARENT),
+                    new Stop(1, Color.web("#817087"))));
+            gc.fillRect(0, 198, WIDTH, 68);
         }
-        gc.setFill(Color.web("#4a4e69"));
+        if (parisForeground != null) {
+            drawLoopingCity(gc, world);
+        } else if (parisComposite != null) {
+            gc.drawImage(parisComposite, 50, 768, 2652, 728,
+                    -38 + drift * 38, 210, WIDTH + 76, GROUND_Y - 210);
+        }
+        drawStreet(gc, world);
+    }
+
+    private void drawLoopingCity(GraphicsContext gc, GameWorld world) {
+        double layerY = 210;
+        double layerHeight = GROUND_Y - layerY;
+        double tileWidth = layerHeight * parisForeground.getWidth() / parisForeground.getHeight();
+        double travelled = world == null
+                ? menuTime * 24
+                : world.getDistanceMeters() * CITY_SCROLL_PER_METER;
+        double offset = travelled % tileWidth;
+        for (double x = -offset; x < WIDTH; x += tileWidth) {
+            gc.drawImage(parisForeground, 0, 0, parisForeground.getWidth(), parisForeground.getHeight(),
+                    x, layerY, tileWidth, layerHeight);
+        }
+    }
+
+    private void drawStreet(GraphicsContext gc, GameWorld world) {
+        gc.setFill(Color.web("#433d4c"));
         gc.fillRect(0, GROUND_Y, WIDTH, HEIGHT - GROUND_Y);
+        gc.setFill(Color.web("#b58b79"));
+        gc.fillRect(0, GROUND_Y, WIDTH, 7);
+        gc.setFill(Color.web("#775e63"));
+        gc.fillRect(0, GROUND_Y + 7, WIDTH, 5);
+
+        double scroll = (world == null ? menuTime * 31 : world.getDistanceMeters() * 31) % 37;
+        Color[] stones = {Color.web("#76616a"), Color.web("#695860"), Color.web("#806871"),
+                Color.web("#62535d"), Color.web("#725e66"), Color.web("#8a6e72")};
+        double[] rowHeight = {12, 14, 16, 18, 21, 24, 27};
+        double y = GROUND_Y + 16;
+        for (int row = 0; row < rowHeight.length && y < HEIGHT - 36; row++) {
+            double height = rowHeight[row];
+            double width = 19 + row * 4;
+            double start = -width - ((scroll + row * 13) % width);
+            int column = 0;
+            for (double x = start; x < WIDTH; column++) {
+                int variation = Math.floorMod(column * 7 + row * 5, 9);
+                double stoneWidth = width - 4 + variation;
+                double inset = 2 + ((column * 3 + row) % 3);
+                double[] px = {x + inset, x + stoneWidth - inset, x + stoneWidth,
+                        x + stoneWidth - 2, x + 2, x};
+                double[] py = {y + 1, y + 1 + variation % 3, y + height * 0.46,
+                        y + height - 1, y + height - 1, y + height * 0.52};
+                gc.setFill(stones[Math.floorMod(column * 5 + row * 3, stones.length)]);
+                gc.fillPolygon(px, py, px.length);
+                gc.setStroke(Color.rgb(32, 25, 36, 0.24));
+                gc.strokePolygon(px, py, px.length);
+                x += stoneWidth + 2;
+            }
+            y += height;
+        }
+
+        // A low foreground barrier gives the street depth while leaving the runner readable.
+        double railY = HEIGHT - 34;
+        gc.setFill(Color.web("#242632"));
+        gc.fillRect(0, railY, WIDTH, 7);
+        gc.setFill(Color.web("#9b7774"));
+        gc.fillRect(0, railY + 7, WIDTH, 3);
+        gc.setStroke(Color.web("#292a36"));
+        gc.setLineWidth(5);
+        for (int x = -18; x < WIDTH; x += 138) {
+            gc.strokeLine(x, railY + 10, x + 138, HEIGHT);
+            gc.strokeLine(x + 138, railY + 10, x, HEIGHT);
+        }
+        for (int x = -18; x <= WIDTH + 18; x += 138) {
+            gc.setFill(Color.web("#272936"));
+            gc.fillRoundRect(x - 7, railY - 10, 14, HEIGHT - railY + 10, 5, 5);
+            gc.setFill(Color.web("#c08d75"));
+            gc.fillOval(x - 4, railY - 9, 8, 5);
+        }
     }
 
     private void drawMenu(GraphicsContext gc) {
@@ -159,28 +273,11 @@ public final class GameRenderer {
     }
 
     private void drawMenuBackdrop(GraphicsContext gc) {
-        gc.setFill(Color.web("#242942"));
+        gc.setFill(new LinearGradient(0, 0, 0, HEIGHT, false, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.rgb(18, 21, 38, 0.3)),
+                new Stop(0.48, Color.rgb(18, 21, 38, 0.22)),
+                new Stop(1, Color.rgb(18, 21, 38, 0.68))));
         gc.fillRect(0, 0, WIDTH, HEIGHT);
-        gc.setFill(Color.web("#303552"));
-        for (int i = 0; i < 12; i++) {
-            double x = (i * 137 - menuTime * (9 + i % 3 * 3)) % (WIDTH + 120);
-            if (x < -120) x += WIDTH + 120;
-            double height = 54 + (i * 29) % 94;
-            gc.fillRect(x, 610 - height, 84, height);
-            gc.setFill(Color.web("#f2cc8f", 0.55));
-            gc.fillRect(x + 13, 624 - height, 4, 5);
-            gc.fillRect(x + 33, 624 - height, 4, 5);
-            gc.fillRect(x + 53, 624 - height, 4, 5);
-            gc.setFill(Color.web("#303552"));
-        }
-        gc.setFill(Color.web("#f2cc8f"));
-        gc.fillRect(0, 610, WIDTH, 2);
-        double metroX = (menuTime * 85) % (WIDTH + 190) - 120;
-        gc.setFill(Color.web("#d7e4e8"));
-        gc.fillRoundRect(metroX, 586, 76, 22, 5, 5);
-        gc.setFill(Color.web("#00b4d8"));
-        gc.fillRect(metroX, 600, 76, 4);
-        gc.setFill(Color.web("#f2cc8f"));
     }
 
     private void drawSettings(GraphicsContext gc, String jumpKey, String slideKey, String bindingPrompt) {
@@ -220,6 +317,11 @@ public final class GameRenderer {
     }
 
     private void drawHowToPlay(GraphicsContext gc, String jumpKey, String slideKey) {
+        drawMenuBackdrop(gc);
+        gc.setFill(Color.rgb(20, 23, 38, 0.78));
+        gc.fillRoundRect(260, 225, 760, 315, 14, 14);
+        gc.setStroke(Color.rgb(245, 223, 177, 0.6));
+        gc.strokeRoundRect(260, 225, 760, 315, 14, 14);
         gc.setFill(Color.web("#f2cc8f"));
         gc.setFont(Font.font("Consolas", FontWeight.BOLD, 42));
         gc.fillText("HOW TO PLAY", 420, 190);
@@ -268,6 +370,9 @@ public final class GameRenderer {
         for (var ticket : world.getTickets()) {
             if (transitCards != null) {
                 int frame = (int) (menuTime * 3.0) % transitCards.getFrameCount();
+                double pulse = 0.12 + 0.07 * (0.5 + 0.5 * Math.sin(menuTime * 4.0 + ticket.getX() * 0.025));
+                gc.setFill(Color.rgb(86, 183, 255, pulse));
+                gc.fillOval(ticket.getX() - 10, ticket.getY() - 8, ticket.getWidth() + 20, ticket.getHeight() + 16);
                 transitCards.drawFitted(gc, frame, ticket.getX() - 13, ticket.getY() - 4, 50, 38);
             } else {
                 gc.setFill(Color.GOLD);
@@ -291,55 +396,110 @@ public final class GameRenderer {
         if (playerSprite == null) {
             gc.fillRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
         } else {
-            playerSprite.drawFitted(gc, playerAnimation.getCurrentFrame(), player.getX() - 10,
-                    player.getY() + offset, player.getWidth() + 20, player.getHeight());
+            double spriteHeight = player.getHeight() * 1.55;
+            playerSprite.drawFitted(gc, playerAnimation.getCurrentFrame(), player.getX() - 18,
+                    player.getY() + offset - (spriteHeight - player.getHeight()),
+                    player.getWidth() + 36, spriteHeight);
             if (player.isConfused() || player.isSlowed()) {
-                gc.setStroke(player.isConfused() ? Color.YELLOWGREEN : Color.ORANGE);
-                gc.strokeRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
+                gc.setGlobalAlpha(0.2);
+                gc.setFill(player.isConfused() ? Color.YELLOWGREEN : Color.ORANGE);
+                gc.fillOval(player.getX() - 8, GROUND_Y - 7, player.getWidth() + 16, 12);
             }
         }
         gc.setGlobalAlpha(1.0);
 
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 24));
-        if (world.getMode() == GameWorld.Mode.CATCH_THE_METRO) {
-            gc.fillText(String.format("TIME: %05.2f", world.getTimeRemaining()), 25, 42);
-            gc.fillText(String.format("ROUTE: %.0f / %.0f m",
-                    Math.min(world.getDistanceMeters(), GameWorld.NORMAL_GOAL_METERS), GameWorld.NORMAL_GOAL_METERS), 340, 42);
-            drawProgressBar(gc, world);
-        } else {
-            gc.fillText("ENDLESS", 25, 42);
-            gc.fillText(String.format("DISTANCE: %.0f m", world.getDistanceMeters()), WIDTH - 330, 42);
-            gc.setFont(Font.font("Consolas", FontWeight.BOLD, 18));
-            gc.fillText(String.format("BEST: %d", endlessHighScore), WIDTH - 330, 76);
-        }
-        if (heartSprite == null) {
-            gc.setFill(Color.CRIMSON);
-            gc.fillText("♥ ".repeat(world.getHearts()), 25, 82);
-        } else {
-            for (int heart = 0; heart < world.getHearts(); heart++) {
-                heartSprite.drawFitted(gc, 0, 25 + heart * 34, 55, 28, 32);
+        drawHudPanel(gc, 20, 16, 310, 60);
+        drawHudPanel(gc, 510, 12, 260, 66);
+        drawHudPanel(gc, 950, 16, 310, 60);
+        gc.setFill(Color.web("#f5dfb1"));
+        gc.setFont(Font.font(pixelFontFamily, 9));
+        gc.fillText("HEARTS", 34, 31);
+        gc.fillText("TICKETS  " + world.getTicketsCollected(), 165, 52);
+        for (int heart = 0; heart < GameWorld.STARTING_HEARTS; heart++) {
+            double alpha = heart < world.getHearts() ? 1.0 : 0.24;
+            if (heartSprite != null) {
+                gc.setGlobalAlpha(alpha);
+                heartSprite.drawFitted(gc, 0, 34 + heart * 36, 36, 27, 25);
+                gc.setGlobalAlpha(1.0);
+            } else {
+                gc.setFill(heart < world.getHearts() ? Color.CRIMSON : Color.web("#71656c"));
+                gc.setFont(Font.font("Serif", 26));
+                gc.fillText("♥", 34 + heart * 36, 60);
             }
         }
-        gc.setFill(Color.GOLD);
-        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 18));
-        gc.fillText("TICKETS: " + world.getTicketsCollected(), 170, 78);
+
+        gc.setFill(Color.web("#f5dfb1"));
+        gc.setFont(Font.font(pixelFontFamily, 9));
+        gc.fillText(world.getMode() == GameWorld.Mode.CATCH_THE_METRO ? "LAST METRO" : "ENDLESS RUN", 554, 31);
+        gc.setFill(Color.WHITE);
+        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 27));
+        if (world.getMode() == GameWorld.Mode.CATCH_THE_METRO) {
+            gc.fillText(String.format("%02d:%02d", (int) world.getTimeRemaining() / 60,
+                    (int) world.getTimeRemaining() % 60), 580, 64);
+        } else {
+            gc.fillText(String.format("%04.0f m", world.getDistanceMeters()), 568, 64);
+        }
+
+        gc.setFill(Color.web("#f5dfb1"));
+        gc.setFont(Font.font(pixelFontFamily, 9));
+        gc.fillText(world.getMode() == GameWorld.Mode.CATCH_THE_METRO ? "DISTANCE" : "PERSONAL BEST", 974, 31);
+        gc.setFill(Color.WHITE);
+        gc.setFont(Font.font("Consolas", FontWeight.BOLD, 25));
+        if (world.getMode() == GameWorld.Mode.CATCH_THE_METRO) {
+            gc.fillText(String.format("%.0f / %.0f m",
+                    Math.min(world.getDistanceMeters(), GameWorld.NORMAL_GOAL_METERS), GameWorld.NORMAL_GOAL_METERS),
+                    974, 61);
+        } else {
+            gc.fillText(String.format("%d m", endlessHighScore), 974, 61);
+        }
+
+        if (world.getMode() == GameWorld.Mode.CATCH_THE_METRO) drawProgressBar(gc, world);
 
         if (bannerTimer > 0 && !bannerText.isEmpty()) {
-            gc.setFill(Color.rgb(0, 0, 0, 0.75));
-            gc.fillRoundRect(240, 100, 800, 48, 8, 8);
+            gc.setFill(Color.rgb(20, 19, 31, 0.88));
+            gc.fillRoundRect(230, 146, 820, 43, 8, 8);
+            gc.setStroke(Color.rgb(242, 204, 143, 0.52));
+            gc.strokeRoundRect(230, 146, 820, 43, 8, 8);
             gc.setFill(Color.GOLD);
-            gc.setFont(Font.font("Consolas", FontWeight.BOLD, 17));
-            gc.fillText(bannerText, 260, 130);
+            gc.setFont(Font.font("Consolas", FontWeight.BOLD, 16));
+            gc.fillText(bannerText, 250, 173);
         }
+    }
+
+    private void drawHudPanel(GraphicsContext gc, double x, double y, double width, double height) {
+        gc.setFill(Color.rgb(20, 23, 38, 0.82));
+        gc.fillRoundRect(x + 3, y + 4, width, height, 12, 12);
+        gc.setFill(Color.rgb(34, 39, 57, 0.92));
+        gc.fillRoundRect(x, y, width, height, 12, 12);
+        gc.setStroke(Color.rgb(245, 223, 177, 0.68));
+        gc.strokeRoundRect(x, y, width, height, 12, 12);
     }
 
     private void drawProgressBar(GraphicsContext gc, GameWorld world) {
         double progress = Math.min(1.0, world.getDistanceMeters() / GameWorld.NORMAL_GOAL_METERS);
-        gc.setFill(Color.web("#303552"));
-        gc.fillRoundRect(25, 102, 1230, 18, 8, 8);
-        gc.setFill(Color.web("#f2cc8f"));
-        gc.fillRoundRect(25, 102, 1230 * progress, 18, 8, 8);
+        double x = 200;
+        double width = 880;
+        gc.setFill(Color.rgb(20, 23, 38, 0.84));
+        gc.fillRoundRect(x, 94, width, 15, 8, 8);
+        gc.setFill(Color.web("#f3dba5"));
+        gc.fillRoundRect(x + 3, 97, (width - 6) * progress, 9, 6, 6);
+        double marker = x + 3 + (width - 6) * progress;
+        gc.setFill(Color.WHITE);
+        gc.fillRoundRect(marker - 12, 82, 24, 17, 5, 5);
+        gc.setFill(Color.web("#39a6cf"));
+        gc.fillRect(marker - 9, 87, 18, 5);
+        gc.setFill(Color.web("#263144"));
+        gc.fillRoundRect(marker - 7, 84, 5, 3, 1, 1);
+        gc.fillRoundRect(marker + 2, 84, 5, 3, 1, 1);
+        gc.fillOval(marker - 7, 97, 5, 4);
+        gc.fillOval(marker + 2, 97, 5, 4);
+        gc.setStroke(Color.WHITE);
+        gc.setLineWidth(2);
+        gc.strokeLine(x + width - 1, 82, x + width - 1, 111);
+        for (int square = 0; square < 3; square++) {
+            gc.setFill(square % 2 == 0 ? Color.WHITE : Color.web("#263144"));
+            gc.fillRect(x + width - 1 + (square % 2) * 4, 82 + square * 4, 4, 4);
+        }
     }
 
     private void drawMetro(GraphicsContext gc, GameWorld world) {
