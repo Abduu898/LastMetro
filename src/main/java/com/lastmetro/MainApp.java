@@ -25,7 +25,7 @@ import java.nio.file.Path;
 public class MainApp extends Application implements GameObserver {
     public static final int WIDTH = 1280;
     public static final int HEIGHT = 720;
-    public static final double GROUND_Y = 580.0;
+    public static final double GROUND_Y = 554.0;
 
     private GameWorld world;
     private GameScreen screen = GameScreen.MENU;

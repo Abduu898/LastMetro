@@ -10,7 +10,12 @@ OUTPUT_DIR = ROOT / "src" / "main" / "resources" / "assets" / "backgrounds"
 
 
 def is_neutral_sky(r, g, b):
-    return abs(r - g) < 15 and abs(g - b) < 15 and r > 125
+    return (
+        abs(r - g) < 28
+        and abs(g - b) < 28
+        and abs(r - b) < 28
+        and r > 105
+    )
 
 
 def clean_mid_building(source_name, output_name):
@@ -50,15 +55,29 @@ def clean_mid_building(source_name, output_name):
         r, g, b, _ = pixels[x, y]
         pixels[x, y] = (r, g, b, 0)
 
+    # Dilate the alpha mask once so JPEG dithering on one-pixel square borders
+    # is removed as well instead of remaining as faint grid fringes.
+    border = set()
+    for x, y in transparent:
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in transparent:
+                    border.add((nx, ny))
+
+    for x, y in border:
+        r, g, b, _ = pixels[x, y]
+        pixels[x, y] = (r, g, b, 0)
+
     image.save(OUTPUT_DIR / output_name, format="PNG", optimize=False)
 
 
 def is_bright_magenta(r, g, b):
-    return r > 180 and g < 80 and b > 180
+    return r > 140 and b > 140 and g < min(r, b) - 35
 
 
 def is_pink_fringe(r, g, b):
-    return r > 150 and g < 120 and b > 150
+    return r > 140 and b > 140 and g < min(r, b) - 25
 
 
 def clean_walkway(source_name, output_name):
@@ -88,6 +107,15 @@ def clean_walkway(source_name, output_name):
     for x, y in keyed | fringe:
         r, g, b, _ = pixels[x, y]
         pixels[x, y] = (r, g, b, 0)
+
+    # Despill semi-transparent pink edge pixels that remain around fine details.
+    for y in range(height):
+        for x in range(width):
+            r, g, b, alpha = pixels[x, y]
+            if 0 < alpha < 255 and is_pink_fringe(r, g, b):
+                r = min(r, g)
+                b = min(b, g)
+                pixels[x, y] = (r, g, b, alpha)
 
     image.save(OUTPUT_DIR / output_name, format="PNG", optimize=False)
 

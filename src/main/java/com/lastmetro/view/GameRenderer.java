@@ -19,7 +19,7 @@ import javafx.scene.text.FontWeight;
 public final class GameRenderer {
     private static final double WIDTH = 1280;
     private static final double HEIGHT = 720;
-    private static final double GROUND_Y = 580;
+    private static final double GROUND_Y = 554;
     private static final double CITY_SCROLL_PER_METER = 2.1;
     private static final double[] RUNNING_BOB = {0, -2, -3, -2};
     private static final double[] SLIDING_BOB = {0, 1};
@@ -228,7 +228,7 @@ public final class GameRenderer {
             gc.drawImage(part1FarBackground, x, 0, farWidth, farHeight);
         }
 
-        double middleHeight = GROUND_Y - 210.0;
+        double middleHeight = HEIGHT * 0.70;
         double middleAWidth = middleHeight * part1MidBuildingsA.getWidth()
                 / part1MidBuildingsA.getHeight();
         double middleBWidth = middleHeight * part1MidBuildingsB.getWidth()
@@ -236,23 +236,35 @@ public final class GameRenderer {
         double middleCycleWidth = middleAWidth + middleBWidth;
         double middleOffset = (cameraOffset * 0.50) % middleCycleWidth;
         double middleX = -middleOffset;
-        boolean drawA = true;
+        boolean drawA = middleOffset < middleAWidth;
         while (middleX < WIDTH) {
             Image middleImage = drawA ? part1MidBuildingsA : part1MidBuildingsB;
             double tileWidth = drawA ? middleAWidth : middleBWidth;
-            gc.drawImage(middleImage, middleX, GROUND_Y - middleHeight,
+            gc.drawImage(middleImage, middleX, HEIGHT * 0.70 - middleHeight,
                     tileWidth, middleHeight);
             middleX += tileWidth;
             drawA = !drawA;
         }
 
-        double foregroundHeight = HEIGHT;
-        double foregroundWidth = foregroundHeight * part1FrontWalkway.getWidth()
-                / part1FrontWalkway.getHeight();
-        double foregroundOffset = (cameraOffset * 1.00) % foregroundWidth;
-        for (double x = -foregroundOffset; x < WIDTH; x += foregroundWidth) {
-            gc.drawImage(part1FrontWalkway, x, HEIGHT - foregroundHeight,
-                    foregroundWidth, foregroundHeight);
+        double walkwayTop = HEIGHT * 0.68;
+        double walkwayHeight = HEIGHT - walkwayTop;
+        double walkwaySourceY = 720;
+        double walkwaySourceHeight = part1FrontWalkway.getHeight() - walkwaySourceY;
+        double walkwayTileWidth = walkwayHeight * part1FrontWalkway.getWidth()
+                / walkwaySourceHeight;
+        double foregroundOffset = (cameraOffset * 1.00) % walkwayTileWidth;
+
+        double lampSourceY = 475;
+        double lampSourceHeight = walkwaySourceY - lampSourceY;
+        double lampHeight = walkwayHeight * lampSourceHeight / walkwaySourceHeight;
+        double lampY = walkwayTop - lampHeight;
+        for (double x = -foregroundOffset; x < WIDTH; x += walkwayTileWidth) {
+            gc.drawImage(part1FrontWalkway,
+                    0, lampSourceY, part1FrontWalkway.getWidth(), lampSourceHeight,
+                    x, lampY, walkwayTileWidth, lampHeight);
+            gc.drawImage(part1FrontWalkway,
+                    0, walkwaySourceY, part1FrontWalkway.getWidth(), walkwaySourceHeight,
+                    x, walkwayTop, walkwayTileWidth, walkwayHeight);
         }
     }
 
