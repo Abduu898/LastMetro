@@ -32,6 +32,10 @@ public final class GameRenderer {
     private Image parisComposite;
     private Image parisForeground;
     private Image parisStreetBackground;
+    private Image part1FarBackground;
+    private Image part1MidBuildingsA;
+    private Image part1MidBuildingsB;
+    private Image part1FrontWalkway;
     private String pixelFontFamily = "Consolas";
     private double menuTime;
 
@@ -44,6 +48,7 @@ public final class GameRenderer {
         loadParisComposite();
         loadParisForeground();
         loadParisStreetBackground();
+        loadPart1BackgroundLayers();
         String atlas = "/assets/sprites/commuter-atlas.png";
         loadPlayerSprite("RUNNING", atlas,
                 new Rectangle2D(65, 34, 181, 208), new Rectangle2D(334, 34, 186, 208),
@@ -97,6 +102,24 @@ public final class GameRenderer {
         Image image = new Image(resource.toExternalForm(), false);
         if (!image.isError() && image.getWidth() >= 1200 && image.getHeight() >= 650) {
             parisStreetBackground = image;
+        }
+    }
+
+    private void loadPart1BackgroundLayers() {
+        part1FarBackground = loadOptionalImage("/assets/backgrounds/part1_far_bg.png");
+        part1MidBuildingsA = loadOptionalImage("/assets/backgrounds/part1_mid_buildings_A.png");
+        part1MidBuildingsB = loadOptionalImage("/assets/backgrounds/part1_mid_buildings_B.png");
+        part1FrontWalkway = loadOptionalImage("/assets/backgrounds/part1_front_walkway.png");
+    }
+
+    private Image loadOptionalImage(String path) {
+        var resource = GameRenderer.class.getResource(path);
+        if (resource == null) return null;
+        try {
+            Image image = new Image(resource.toExternalForm(), false);
+            return image.isError() ? null : image;
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 
@@ -156,6 +179,12 @@ public final class GameRenderer {
     }
 
     private void drawBackground(GraphicsContext gc, GameScreen screen, GameWorld world) {
+        gc.setImageSmoothing(false);
+        if (part1FarBackground != null && part1MidBuildingsA != null
+                && part1MidBuildingsB != null && part1FrontWalkway != null) {
+            drawPart1Parallax(gc, world);
+            return;
+        }
         if (parisStreetBackground != null) {
             gc.drawImage(parisStreetBackground, 0, 0, WIDTH, HEIGHT);
             return;
@@ -184,6 +213,47 @@ public final class GameRenderer {
                     -38 + drift * 38, 210, WIDTH + 76, GROUND_Y - 210);
         }
         drawStreet(gc, world);
+    }
+
+    private void drawPart1Parallax(GraphicsContext gc, GameWorld world) {
+        double cameraOffset = world == null
+                ? menuTime * 31.0
+                : world.getDistanceMeters() * 31.0;
+
+        double farHeight = HEIGHT;
+        double farWidth = farHeight * part1FarBackground.getWidth()
+                / part1FarBackground.getHeight();
+        double farOffset = (cameraOffset * 0.10) % farWidth;
+        for (double x = -farOffset; x < WIDTH; x += farWidth) {
+            gc.drawImage(part1FarBackground, x, 0, farWidth, farHeight);
+        }
+
+        double middleHeight = GROUND_Y - 210.0;
+        double middleAWidth = middleHeight * part1MidBuildingsA.getWidth()
+                / part1MidBuildingsA.getHeight();
+        double middleBWidth = middleHeight * part1MidBuildingsB.getWidth()
+                / part1MidBuildingsB.getHeight();
+        double middleCycleWidth = middleAWidth + middleBWidth;
+        double middleOffset = (cameraOffset * 0.50) % middleCycleWidth;
+        double middleX = -middleOffset;
+        boolean drawA = true;
+        while (middleX < WIDTH) {
+            Image middleImage = drawA ? part1MidBuildingsA : part1MidBuildingsB;
+            double tileWidth = drawA ? middleAWidth : middleBWidth;
+            gc.drawImage(middleImage, middleX, GROUND_Y - middleHeight,
+                    tileWidth, middleHeight);
+            middleX += tileWidth;
+            drawA = !drawA;
+        }
+
+        double foregroundHeight = HEIGHT;
+        double foregroundWidth = foregroundHeight * part1FrontWalkway.getWidth()
+                / part1FrontWalkway.getHeight();
+        double foregroundOffset = (cameraOffset * 1.00) % foregroundWidth;
+        for (double x = -foregroundOffset; x < WIDTH; x += foregroundWidth) {
+            gc.drawImage(part1FrontWalkway, x, HEIGHT - foregroundHeight,
+                    foregroundWidth, foregroundHeight);
+        }
     }
 
     private void drawLoopingCity(GraphicsContext gc, GameWorld world) {

@@ -1,6 +1,6 @@
 package com.lastmetro.model;
 
-import com.lastmetro.patterns.strategy.MovementStrategy;
+import com.lastmetro.strategy.MovementStrategy;
 
 public abstract class Hazard extends Entity {
     protected final MovementStrategy strategy;

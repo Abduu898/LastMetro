@@ -1,6 +1,6 @@
 package com.lastmetro.model;
 
-import com.lastmetro.patterns.strategy.StaticGroundStrategy;
+import com.lastmetro.strategy.StaticGroundStrategy;
 
 public class DogPoop extends Hazard {
     public DogPoop(double spawnX, double groundY) {

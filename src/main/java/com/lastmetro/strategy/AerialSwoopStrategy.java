@@ -1,4 +1,4 @@
-package com.lastmetro.patterns.strategy;
+package com.lastmetro.strategy;
 
 import com.lastmetro.model.Hazard;
 

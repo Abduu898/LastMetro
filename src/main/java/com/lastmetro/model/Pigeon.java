@@ -1,6 +1,6 @@
 package com.lastmetro.model;
 
-import com.lastmetro.patterns.strategy.AerialSwoopStrategy;
+import com.lastmetro.strategy.AerialSwoopStrategy;
 
 public class Pigeon extends Hazard {
     public Pigeon(double spawnX, double groundY) {

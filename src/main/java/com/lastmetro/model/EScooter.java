@@ -1,6 +1,6 @@
 package com.lastmetro.model;
 
-import com.lastmetro.patterns.strategy.FastChargeStrategy;
+import com.lastmetro.strategy.FastChargeStrategy;
 
 public class EScooter extends Hazard {
     public EScooter(double spawnX, double groundY) {
