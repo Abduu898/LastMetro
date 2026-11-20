@@ -69,6 +69,29 @@ def clean_mid_building(source_name, output_name):
         r, g, b, _ = pixels[x, y]
         pixels[x, y] = (r, g, b, 0)
 
+    # Feather only the two architectural tile seams. This removes a hard
+    # vertical cut while preserving the interior and base of each image.
+    feather_width = 5
+    for y in range(height):
+        for x in range(feather_width):
+            alpha = pixels[x, y][3]
+            pixels[x, y] = (
+                pixels[x, y][0],
+                pixels[x, y][1],
+                pixels[x, y][2],
+                alpha * (x + 1) // (feather_width + 1),
+            )
+
+        for x in range(width - feather_width, width):
+            alpha = pixels[x, y][3]
+            progress = width - x
+            pixels[x, y] = (
+                pixels[x, y][0],
+                pixels[x, y][1],
+                pixels[x, y][2],
+                alpha * progress // (feather_width + 1),
+            )
+
     image.save(OUTPUT_DIR / output_name, format="PNG", optimize=False)
 
 

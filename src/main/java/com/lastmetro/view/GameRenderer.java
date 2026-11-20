@@ -231,19 +231,23 @@ public final class GameRenderer {
         double middleHeight = HEIGHT * 0.70;
         double middleAWidth = middleHeight * part1MidBuildingsA.getWidth()
                 / part1MidBuildingsA.getHeight();
-        double middleBWidth = middleHeight * part1MidBuildingsB.getWidth()
-                / part1MidBuildingsB.getHeight();
-        double middleCycleWidth = middleAWidth + middleBWidth;
-        double middleOffset = (cameraOffset * 0.50) % middleCycleWidth;
-        double middleX = -middleOffset;
-        boolean drawA = middleOffset < middleAWidth;
-        while (middleX < WIDTH) {
-            Image middleImage = drawA ? part1MidBuildingsA : part1MidBuildingsB;
-            double tileWidth = drawA ? middleAWidth : middleBWidth;
-            gc.drawImage(middleImage, middleX, HEIGHT * 0.70 - middleHeight,
-                    tileWidth, middleHeight);
-            middleX += tileWidth;
-            drawA = !drawA;
+        long tileWidth = Math.round(middleAWidth);
+        double middleCycleWidth = tileWidth * 2;
+        double middleOffset = (cameraOffset * 0.35) % middleCycleWidth;
+        double midScrollX = -middleOffset;
+        double x0 = Math.floor(midScrollX);
+        long overlap = 1;
+
+        int tileIndex = 0;
+        for (int i = 0; ; i++) {
+            double x = x0 + i * tileWidth;
+            if (x >= WIDTH) break;
+            Image middleImage = tileIndex % 2 == 0
+                    ? part1MidBuildingsA
+                    : part1MidBuildingsB;
+            gc.drawImage(middleImage, x, HEIGHT * 0.70 - middleHeight,
+                    tileWidth + overlap, middleHeight);
+            tileIndex++;
         }
 
         double walkwayTop = HEIGHT * 0.68;
