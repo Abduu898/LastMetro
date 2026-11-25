@@ -9,8 +9,8 @@ public class DogPoop extends Hazard {
 
     @Override
     public String onCollide(Commuter player) {
-        player.applyStenchDebuff(3.0);
-        return "Watch your step! Jump and slide are reversed for 3 seconds.";
+        player.applySlowDebuff(.55);
+        return "WATCH YOUR STEP";
     }
 
     @Override

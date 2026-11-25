@@ -1,6 +1,7 @@
 package com.lastmetro.model;
 
 import com.lastmetro.patterns.factory.HazardFactory;
+import com.lastmetro.patterns.factory.HazardFactory.Pattern;
 import com.lastmetro.patterns.observer.GameObserver;
 
 import java.util.ArrayList;
@@ -12,14 +13,16 @@ import java.util.Objects;
  * Core pure-Java simulation holding the commuter, active hazards, countdown, and finale state.
  */
 public class GameWorld {
-    public static final double INITIAL_TIME = 45.0;
+    public static final double INITIAL_TIME = 50.0;
     public static final double BASE_SCROLL_SPEED = 460.0;
     public static final double NORMAL_GOAL_METERS = 500.0;
     public static final int MAX_HEARTS = 3;
     public static final int STARTING_HEARTS = MAX_HEARTS;
-    public static final double INITIAL_HAZARD_INTERVAL_SECONDS = 1.65;
-    public static final double MIN_HAZARD_INTERVAL_SECONDS = 1.10;
-    private static final double INITIAL_TICKET_INTERVAL_SECONDS = 3.0;
+    public static final double TRAIN_STOP_X = 680;
+    public static final double TRAIN_DOOR_OFFSET = 192;
+    private static final double BOARDING_END = 2.10;
+    private static final double DOORS_CLOSED = 2.72;
+    private static final double DEPARTURE_START = 2.90;
 
     public enum Mode { CATCH_THE_METRO, ENDLESS }
 
@@ -32,10 +35,17 @@ public class GameWorld {
     private final List<Ticket> tickets = new ArrayList<>();
     private final List<Coin> coins = new ArrayList<>();
     private final List<HeartPickup> heartPickups = new ArrayList<>();
-    private double heartCooldown = 7;
+    private boolean quickTransfers;
+    private double transferDuration;
+    private boolean openingPattern = true;
+    private Pattern previousPattern;
+    private double nextPatternDistance = 1;
+    private double nextHeartDistance = 65;
+    private int executionScore, cleanDodges, perfectLandings, cleanSections, sectionStartHits;
+    private double landingWindow, hazardDodgeNotice;
+    private boolean landingAwarded;
     private int heartsCollected, heartBonusPoints, hitsTaken;
     private boolean lastHeartRestored;
-    private double coinCooldown = .65;
     private int coinsCollected, coinScore, combo, bestCombo;
     private double comboTimer;
     private double finaleTime;
@@ -47,8 +57,6 @@ public class GameWorld {
     private final List<GameObserver> observers = new ArrayList<>();
 
     private double timeRemaining = INITIAL_TIME;
-    private double spawnCooldown = INITIAL_HAZARD_INTERVAL_SECONDS;
-    private double ticketSpawnCooldown = INITIAL_TICKET_INTERVAL_SECONDS;
     private double distanceMeters = 0.0;
     private boolean finaleActive = false;
     private boolean gameOver = false;
@@ -103,22 +111,47 @@ public class GameWorld {
                 if (transferRemaining < .0000001) { transferRemaining = 0; routeStage++; stageStartDistance = distanceMeters; }
                 continue;
             }
-            double untilBoundary = routeStage < 2 && !finaleActive
-                    ? RouteTimeline.end(routeStage) - getActiveElapsed() : Double.POSITIVE_INFINITY;
-            if (untilBoundary <= .0000001) { beginTransfer(); continue; }
-            double step = Math.min(remaining, untilBoundary);
-            advancePlay(step); remaining -= step;
-            if (routeStage < 2 && !finaleActive && getActiveElapsed() >= RouteTimeline.end(routeStage) - .0000001)
+            double step = Math.min(remaining, 1.0 / 60.0);
+            if (routeStage < 2 && !finaleActive) {
+                double metresLeft = RouteTimeline.end(routeStage) - distanceMeters;
+                step = Math.min(step, metresLeft * 40 / scrollSpeed(step));
+            }
+            advancePlay(step);
+            remaining -= step;
+            if (!gameOver && routeStage < 2 && distanceMeters >= RouteTimeline.end(routeStage) - .000001) {
+                distanceMeters = RouteTimeline.end(routeStage);
                 beginTransfer();
+            }
         }
     }
 
+    public void useQuickTransfers() { quickTransfers = true; }
+
     private void beginTransfer() {
-        transferRemaining = RouteTimeline.TRANSFER_SECONDS;
-        hazards.clear(); coins.clear(); tickets.clear(); heartPickups.clear(); player.reset();
-        heartCooldown = Math.min(heartCooldown, 4);
-        spawnCooldown = 1.4; coinCooldown = .7; ticketSpawnCooldown = 2;
-        notifySarcasticEvent(routeStage == 0 ? "CORRESPONDANCE · Accès métro" : "CORRESPONDANCE · Vers le quai");
+        completeSection();
+        transferDuration = quickTransfers ? RouteTimeline.RETRY_TRANSFER_SECONDS : RouteTimeline.TRANSFER_SECONDS;
+        transferRemaining = transferDuration;
+        hazards.clear();
+        coins.clear();
+        tickets.clear();
+        heartPickups.clear();
+        player.releaseInputs();
+        openingPattern = true;
+        previousPattern = null;
+        nextPatternDistance = distanceMeters + 1;
+        landingWindow = 0;
+        hazardDodgeNotice = 0;
+    }
+
+    private double pace() {
+        return mode == Mode.ENDLESS
+                ? BASE_SCROLL_SPEED * (1.0 + Math.min(distanceMeters / 1000.0, 1.5))
+                : BASE_SCROLL_SPEED;
+    }
+
+    private double scrollSpeed(double step) {
+        double launchEase = .72 + .28 * Math.min(1, (runTime + step) / .55);
+        return pace() * launchEase * (player.isSlowed() ? .65 : 1);
     }
 
     private void advancePlay(double deltaTime) {
@@ -144,16 +177,19 @@ public class GameWorld {
             if (timeRemaining < .0000001) timeRemaining = 0;
         }
 
-        double rampedSpeed = mode == Mode.ENDLESS
-                ? BASE_SCROLL_SPEED * (1.0 + Math.min(distanceMeters / 1000.0, 1.5))
-                : BASE_SCROLL_SPEED;
+        double currentSpeed = scrollSpeed(deltaTime);
         runTime += deltaTime;
-        double launchEase = .72 + .28 * Math.min(1, runTime / .55);
-        double currentSpeed = rampedSpeed * launchEase * (player.isSlowed() ? .65 : 1);
         currentScrollSpeed = currentSpeed;
         distanceMeters += (currentSpeed * deltaTime) / 40.0;
 
+        boolean wasAirborne = player.getY() + player.getHeight() < groundY - .01;
         player.update(deltaTime);
+        landingWindow = Math.max(0, landingWindow - deltaTime);
+        hazardDodgeNotice = Math.max(0, hazardDodgeNotice - deltaTime);
+        if (wasAirborne && player.getY() + player.getHeight() >= groundY - .01) {
+            landingWindow = .22;
+            landingAwarded = false;
+        }
 
         // Resolve the finish using this step's movement, including the last fraction of a second.
         if (mode == Mode.CATCH_THE_METRO && distanceMeters >= NORMAL_GOAL_METERS) {
@@ -168,34 +204,7 @@ public class GameWorld {
             return;
         }
 
-        // Tighten obstacle spacing gradually as each mode progresses.
-        spawnCooldown -= deltaTime;
-        boolean safeTransferApproach = routeStage < 2 && RouteTimeline.end(routeStage) - getActiveElapsed() < 2.8;
-        if (spawnCooldown <= 0 && !safeTransferApproach && (mode == Mode.ENDLESS || getRouteProgress() < .88)) {
-            hazards.add(hazardFactory.createRandomHazard(screenWidth + 60, groundY));
-            spawnCooldown = hazardSpawnInterval(mode, timeRemaining, distanceMeters);
-        }
-
-        // Arcs sit within a normal jump, with flat trails between challenges.
-        coinCooldown -= deltaTime;
-        if (coinCooldown <= 0 && (mode == Mode.ENDLESS || getRouteProgress() < .96)) {
-            boolean arc = ((int) (distanceMeters / 20) & 1) == 0;
-            for (int i = 0; i < 7; i++) coins.add(new Coin(screenWidth + 70 + i * 45,
-                    groundY - 54 - (arc ? Math.sin(i * Math.PI / 6) * 106 : 0)));
-            coinCooldown = 2.35;
-        }
-
-        ticketSpawnCooldown -= deltaTime;
-        if (ticketSpawnCooldown <= 0.0) {
-            tickets.add(new Ticket(screenWidth + 60, groundY - Commuter.STANDING_HEIGHT - 45));
-            ticketSpawnCooldown = INITIAL_TICKET_INTERVAL_SECONDS;
-        }
-
-        heartCooldown -= deltaTime;
-        if (heartCooldown <= 0 && !safeTransferApproach && (mode == Mode.ENDLESS || getRouteProgress() < .9)) {
-            heartPickups.add(new HeartPickup(screenWidth + 60, groundY - 54));
-            heartCooldown = 10;
-        }
+        spawnRoutePattern();
 
         // Move hazards & check AABB collisions
         Iterator<Hazard> it = hazards.iterator();
@@ -208,7 +217,7 @@ public class GameWorld {
                 if (invulnerabilityTimer <= 0.0) {
                     hearts = Math.max(0, hearts - 1);
                     hitsTaken++;
-                    heartCooldown = Math.min(heartCooldown, 2);
+                    nextHeartDistance = Math.min(nextHeartDistance, distanceMeters + 12);
                     combo = 0; comboTimer = 0;
                     invulnerabilityTimer = 1.0;
                     String roast = h.onCollide(player);
@@ -222,6 +231,12 @@ public class GameWorld {
                 }
             }
 
+            if (!h.isTriggered() && h.getX() + h.getWidth() <= player.getX()) {
+                h.setTriggered(true);
+                cleanDodges++;
+                executionScore += 15;
+                hazardDodgeNotice = .65;
+            }
             if (h.isOffScreen()) {
                 it.remove();
             }
@@ -268,18 +283,99 @@ public class GameWorld {
                 coinsCollected++; combo++; comboTimer = 2.8;
                 bestCombo = Math.max(bestCombo, combo);
                 coinScore += Coin.VALUE * getMultiplier();
+                if (coin.isLandingMarker() && landingWindow > 0 && !landingAwarded
+                        && player.getY() + player.getHeight() >= groundY - .01) {
+                    landingAwarded = true;
+                    perfectLandings++;
+                    executionScore += 40;
+                    notifySarcasticEvent("PERFECT LANDING  +40");
+                }
                 coinIterator.remove();
             } else if (coin.getX() < -30) coinIterator.remove();
         }
     }
 
-    static double hazardSpawnInterval(Mode mode, double timeRemaining, double distanceMeters) {
-        double urgency = mode == Mode.ENDLESS
-                ? distanceMeters / 1000.0
-                : 1.0 - (timeRemaining / INITIAL_TIME);
-        urgency = Math.max(0.0, Math.min(1.0, urgency));
-        return INITIAL_HAZARD_INTERVAL_SECONDS
-                - urgency * (INITIAL_HAZARD_INTERVAL_SECONDS - MIN_HAZARD_INTERVAL_SECONDS);
+    private void spawnRoutePattern() {
+        if (distanceMeters < nextPatternDistance) return;
+        double x = screenWidth + 170;
+        double spacing = pace() / BASE_SCROLL_SPEED;
+        double sectionEnd = mode == Mode.ENDLESS && routeStage == 2
+                ? Double.POSITIVE_INFINITY : RouteTimeline.end(routeStage);
+        double approachReserve = routeStage == 2 ? 12 : 6;
+        if (distanceMeters + (x + 870 * spacing - player.getX()) / 40 > sectionEnd - approachReserve) return;
+
+        Pattern pattern = hazardFactory.choosePattern(routeStage, openingPattern, previousPattern);
+        if (!openingPattern && pattern != Pattern.EMPTY && distanceMeters >= nextHeartDistance)
+            pattern = Pattern.RECOVERY;
+        openingPattern = false;
+        previousPattern = pattern;
+        double recovery = routeStage == 0 ? 600 : routeStage == 1 ? 530 : 460;
+        double length = switch (pattern) {
+            case TOKENS, RECOVERY -> {
+                trail(x + 350 * spacing, 67, 4, 54, spacing);
+                for (int i = 0; i < 7; i++) {
+                    double lift = Math.sin((i + 1) * Math.PI / 8) * 100;
+                    coins.add(new Coin(x + (350 + i * 31) * spacing, groundY - 64 - lift));
+                }
+                if (distanceMeters >= nextHeartDistance) {
+                    heartPickups.add(new HeartPickup(x + 443 * spacing, groundY - 148));
+                    nextHeartDistance = distanceMeters + 100;
+                }
+                if (pattern == Pattern.RECOVERY)
+                    tickets.add(new Ticket(x + 520 * spacing, groundY - 124));
+                yield 650;
+            }
+            case BARRIER, CRATE, SCOOTER, SKID -> {
+                jumpChallenge(x, spacing, pattern);
+                yield 300;
+            }
+            case TRANSFER, PLATFORM -> {
+                jumpChallenge(x, spacing, pattern == Pattern.TRANSFER ? Pattern.BARRIER : Pattern.CRATE);
+                slideChallenge(x + (pattern == Pattern.TRANSFER ? 590 : 530) * spacing, spacing,
+                        pattern == Pattern.PLATFORM);
+                yield 710;
+            }
+            case PIGEON -> {
+                slideChallenge(x, spacing, true);
+                yield 260;
+            }
+            case EMPTY -> 0;
+        };
+        nextPatternDistance = distanceMeters + (length + recovery) * spacing / 40;
+    }
+
+    private void jumpChallenge(double x, double spacing, Pattern pattern) {
+        double target = x + 155 * spacing;
+        hazards.add(switch (pattern) {
+            case CRATE -> new StreetObstacle(target, groundY, true);
+            case SCOOTER -> new EScooter(target + (target - player.getX()) * .05, groundY);
+            case SKID -> new DogPoop(target, groundY);
+            default -> new StreetObstacle(target, groundY, false);
+        });
+        int[] heights = {78, 112, 144, 153, 139, 109, 76};
+        for (int i = 0; i < heights.length; i++)
+            coins.add(new Coin(x + i * 42 * spacing, groundY - heights[i]));
+        for (int offset : new int[] {258, 286, 315}) {
+            coins.add(new Coin(x + offset * spacing, groundY - 51, true));
+        }
+    }
+
+    private void slideChallenge(double target, double spacing, boolean pigeon) {
+        hazards.add(pigeon ? new Pigeon(target, groundY) : new OverheadSign(target, groundY));
+        trail(target - 66 * spacing, 33, 6, 32, spacing);
+    }
+
+    private void trail(double x, int gap, int count, int height, double spacing) {
+        for (int i = 0; i < count; i++) coins.add(new Coin(x + i * gap * spacing, groundY - height));
+    }
+
+    private void completeSection() {
+        if (hitsTaken == sectionStartHits) {
+            cleanSections++;
+            executionScore += 100;
+            notifySarcasticEvent("CLEAN SECTION  +100");
+        }
+        sectionStartHits = hitsTaken;
     }
 
     private boolean touchesHazard(Hazard hazard) {
@@ -291,50 +387,63 @@ public class GameWorld {
     }
 
     private void startFinale() {
+        completeSection();
         finaleActive = true;
+        metroTrainX = TRAIN_STOP_X;
         hazards.clear();
         tickets.clear();
         coins.clear();
         heartPickups.clear();
-        player.releaseInputs();
-        notifySarcasticEvent("CHÂTELET · The last train is waiting. You made it!");
+        player.reset();
     }
 
     private void updateFinale(double deltaTime) {
         finaleTime += deltaTime;
-        // A short, readable boarding beat before the victory screen.
-        double targetTrainX = 760.0;
-        if (finaleTime < 1.7) {
-            metroTrainX = Math.max(targetTrainX, metroTrainX - 520.0 * deltaTime);
-            player.setX(Math.min(660.0, player.getX() + 340.0 * deltaTime));
-            player.update(deltaTime);
-        } else if (metroDoorProgress < 1.0) {
-            metroDoorProgress = Math.min(1.0, metroDoorProgress + 2.2 * deltaTime);
-        } else {
-            metroTrainX += 780.0 * deltaTime;
-            if (metroTrainX > screenWidth + 100) {
-                gameOver = true;
-                playerWon = hearts > 0;
-                endMessage = playerWon
-                        ? "Tu as attrapé le dernier métro ! Bien joué, voyageur."
-                        : "Portes fermées. Prochain départ : 05h30.";
-                notifyFinaleTriggered(endMessage);
-            }
+        double doorCenter = TRAIN_STOP_X + TRAIN_DOOR_OFFSET;
+        player.setX(Math.min(doorCenter - player.getWidth() / 2, 150 + finaleTime * 365));
+        metroDoorProgress = Math.clamp((finaleTime - BOARDING_END) / (DOORS_CLOSED - BOARDING_END), 0, 1);
+        double departure = Math.max(0, finaleTime - DEPARTURE_START);
+        metroTrainX = TRAIN_STOP_X + 285 * departure * departure;
+        if (metroTrainX > screenWidth + 100) {
+            gameOver = true;
+            playerWon = true;
+            endMessage = "Tu as attrapé le dernier métro ! Bien joué, voyageur.";
+            notifyFinaleTriggered(endMessage);
         }
     }
+
+    public double getBoardingProgress() {
+        return Math.clamp((finaleTime - 1.80) / .30, 0, 1);
+    }
+
+    public String getMedal() {
+        if (!playerWon) return "";
+        if (hitsTaken == 0 && timeRemaining >= 5) return "GOLD";
+        if (timeRemaining >= 3) return "SILVER";
+        return "BRONZE";
+    }
+
+    public double getDodgeNoticeTime() { return hazardDodgeNotice; }
+    public int getCleanDodges() { return cleanDodges; }
+    public int getPerfectLandings() { return perfectLandings; }
+    public int getCleanSections() { return cleanSections; }
 
     public void reset() {
         hazards.clear();
         tickets.clear(); coins.clear();
-        heartPickups.clear(); heartCooldown = 7;
+        heartPickups.clear(); nextHeartDistance = 65;
         heartsCollected = heartBonusPoints = hitsTaken = 0; lastHeartRestored = false;
         coinsCollected = coinScore = combo = bestCombo = 0;
-        comboTimer = finaleTime = 0; coinCooldown = .65;
+        comboTimer = finaleTime = landingWindow = hazardDodgeNotice = 0;
+        executionScore = cleanDodges = perfectLandings = cleanSections = sectionStartHits = 0;
+        landingAwarded = false;
         runTime = magnetTimer = 0; currentScrollSpeed = BASE_SCROLL_SPEED;
         routeStage = 0; transferRemaining = stageStartDistance = 0;
         timeRemaining = INITIAL_TIME;
-        spawnCooldown = INITIAL_HAZARD_INTERVAL_SECONDS;
-        ticketSpawnCooldown = INITIAL_TICKET_INTERVAL_SECONDS;
+        quickTransfers = true;
+        openingPattern = true;
+        previousPattern = null;
+        nextPatternDistance = 1;
         distanceMeters = 0.0;
         finaleActive = false;
         gameOver = false;
@@ -370,7 +479,7 @@ public class GameWorld {
     public boolean isPlayerWon() { return playerWon; }
     public String getEndMessage() { return endMessage; }
     public int getTicketsCollected() { return ticketsCollected; }
-    public int getScore() { return (int) distanceMeters + ticketsCollected * Ticket.SCORE_VALUE + coinScore + heartBonusPoints + (playerWon ? 500 : 0); }
+    public int getScore() { return (int) distanceMeters + ticketsCollected * Ticket.SCORE_VALUE + coinScore + heartBonusPoints + executionScore + (playerWon ? 500 : 0); }
     public List<HeartPickup> getHeartPickups() { return heartPickups; }
     public int getHeartsCollected() { return heartsCollected; }
     public int getHitsTaken() { return hitsTaken; }
@@ -388,10 +497,10 @@ public class GameWorld {
     public int getRouteStage() { return routeStage; }
     public double getStageDistance() { return Math.max(0, distanceMeters - stageStartDistance); }
     public boolean isTransferring() { return transferRemaining > 0; }
-    public double getTransferProgress() { return isTransferring() ? 1 - transferRemaining / RouteTimeline.TRANSFER_SECONDS : 0; }
+    public double getTransferProgress() { return isTransferring() ? 1 - transferRemaining / transferDuration : 0; }
     public double getActiveElapsed() { return mode == Mode.CATCH_THE_METRO ? INITIAL_TIME - timeRemaining : runTime; }
     public double getStageProgress() {
-        return Math.max(0, Math.min(1, (getActiveElapsed() - RouteTimeline.start(routeStage))
+        return Math.max(0, Math.min(1, getStageDistance()
                 / (RouteTimeline.end(routeStage) - RouteTimeline.start(routeStage))));
     }
     public boolean isInvulnerable() { return invulnerabilityTimer > 0.0; }

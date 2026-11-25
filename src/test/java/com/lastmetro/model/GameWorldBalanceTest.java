@@ -79,7 +79,7 @@ class GameWorldBalanceTest {
                     double reactionDistance = scrollSpeed * multiplier * 0.42;
                     if (target.getX() - world.getPlayer().getX() > reactionDistance) target = null;
                     else {
-                        boolean wantsSlide = target.getType().equals("PIGEON");
+                        boolean wantsSlide = target instanceof Pigeon || target instanceof OverheadSign;
                         actionUsesJumpKey = wantsSlide == world.getPlayer().isConfused();
                         events.add((wantsSlide ? "slide " : "jump ") + target.getType() + " "
                                 + Math.round(world.getDistanceMeters()) + "m gap "

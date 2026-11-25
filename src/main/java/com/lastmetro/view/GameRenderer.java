@@ -44,10 +44,23 @@ public final class GameRenderer {
     private boolean cameraMotion;
     private final ArcadeArt arcade = new ArcadeArt();
     private final ArcadeHud arcadeHud = new ArcadeHud(arcade);
+    private final TicketKiosk kiosk = new TicketKiosk();
+    private int menuSelection, pressedMenuOption = -1;
+    private final VictoryTicket victoryTicket = new VictoryTicket(arcade);
+    private Rectangle2D pressedResultButton;
     private final PixelRouteScenery pixelRoute = new PixelRouteScenery();
     private double pointerX = -1, pointerY = -1;
     private String jumpLabel = "SPACE", slideLabel = "DOWN";
     public void setPointer(double x, double y) { pointerX = x; pointerY = y; }
+
+    public void setKioskSelection(int selected, int pressed) {
+        menuSelection = selected;
+        pressedMenuOption = pressed;
+    }
+
+    public void setPressedResultButton(Rectangle2D button) { pressedResultButton = button; }
+
+    public String updateVictory(double dt) { return victoryTicket.advance(dt, effects.isReducedMotion()); }
 
     public void setPresentationSettings(boolean sound, boolean reducedMotion) {
         soundEnabled = sound;
@@ -171,6 +184,8 @@ public final class GameRenderer {
 
     public void resetAnimations() {
         feedback.reset(); effects.reset();
+        victoryTicket.reset();
+        pressedResultButton = null;
         playerAnimation.play("RUNNING");
         playerAnimation.restart();
     }
@@ -183,19 +198,23 @@ public final class GameRenderer {
         cameraMotion = screen == GameScreen.PLAYING;
         gc.save();
         if (screen == GameScreen.PLAYING) gc.translate(effects.cameraX(), effects.cameraY());
-        drawBackground(gc, screen, world);
+        boolean kioskScreen = screen == GameScreen.MENU || screen == GameScreen.HOW_TO_PLAY
+                || screen == GameScreen.SETTINGS;
+        drawBackground(gc, screen, kioskScreen ? null : world);
         gc.restore();
         switch (screen) {
-            case MENU -> drawMenu(gc);
-            case HOW_TO_PLAY -> drawHowToPlay(gc, jumpKey, slideKey);
-            case SETTINGS -> drawSettings(gc, jumpKey, slideKey, bindingPrompt);
+            case MENU, HOW_TO_PLAY, SETTINGS -> drawKiosk(gc, screen, jumpKey, slideKey, bindingPrompt);
             case PLAYING, PAUSED, RESULTS -> {
                 drawGame(gc, world, bannerText, bannerTimer, endlessHighScore);
                 if (screen == GameScreen.PAUSED) {
                     drawPause(gc, world);
                 } else if (screen == GameScreen.RESULTS) {
-                    drawResults(gc, world, gameOverReason, endlessHighScore);
-                    if (world.isPlayerWon()) effects.drawParticles(gc);
+                    if (world.isPlayerWon()) {
+                        victoryTicket.draw(gc, world, pixelFontFamily, effects.isReducedMotion(),
+                                pointerX, pointerY, pressedResultButton);
+                    } else {
+                        drawDefeat(gc, world, endlessHighScore);
+                    }
                 }
             }
         }
@@ -233,7 +252,7 @@ public final class GameRenderer {
         gc.setFill(Color.web("#1a1a2e"));
         gc.fillRect(0, 0, WIDTH, HEIGHT);
         double distance = world == null ? 0 : world.getDistanceMeters();
-        double drift = Math.sin(menuTime * 0.22 + distance * 0.004);
+        double drift = Math.sin((effects.isReducedMotion() ? 0 : menuTime) * 0.22 + distance * 0.004);
         gc.setFill(new LinearGradient(0, 190, 0, HEIGHT, false, CycleMethod.NO_CYCLE,
                 new Stop(0, Color.web("#88718a")),
                 new Stop(0.52, Color.web("#62536d")),
@@ -258,7 +277,7 @@ public final class GameRenderer {
 
     private void drawPart1Parallax(GraphicsContext gc, GameWorld world) {
         double cameraOffset = world == null
-                ? menuTime * 31.0
+                ? 3500 + (effects.isReducedMotion() ? 0 : menuTime * 31.0)
                 : world.getDistanceMeters() * 40.0;
 
         double farHeight = HEIGHT;
@@ -383,24 +402,22 @@ public final class GameRenderer {
         }
     }
 
-    private void drawMenu(GraphicsContext gc) {
-        drawMenuBackdrop(gc);
-        ArcadeHud.label(gc, "PARIS  ·  01:14 AM", 640, 70, 15, Color.web("#ffe7b4"), true);
-        ArcadeHud.label(gc, "LAST", 640, 136, 28, Color.web("#fff3d4"), true);
-        arcadeTitle(gc, "MÉTRO", 640, 225, 92);
-        ArcadeHud.label(gc, "ONE CITY. ONE LAST TRAIN. RUN FOR IT.", 640, 260, 14, Color.web("#fff3d4"), true);
-        drawMenuButton(gc, 280, "1  CATCH THE LAST METRO");
-        drawMenuButton(gc, 360, "2  ENDLESS COMMUTE");
-        drawMenuButton(gc, 440, "H  HOW TO PLAY");
-        drawMenuButton(gc, 520, "O  CONTROLS & SETTINGS");
-        ArcadeHud.label(gc, "CLICK TO PLAY  ·  OR USE THE NUMBER KEYS", 640, 631, 13, Color.web("#e9e2ce"), true);
+    private void drawKiosk(GraphicsContext gc, GameScreen screen, String jump, String slide, String binding) {
+        gc.save();
+        gc.setImageSmoothing(false);
+        boolean reduced = effects.isReducedMotion();
         var hero = playerSprites.get("RUNNING");
-        if (hero != null) hero.drawGrounded(gc, (int) (menuTime * 4) % hero.getFrameCount(), 170, 580, 190);
-        ArcadeHud.panel(gc, 985, 340, 230, 150, false);
-        ArcadeHud.label(gc, "THE NIGHT RUN", 1100, 374, 15, Color.web("#ffce76"), true);
-        ArcadeHud.label(gc, "500 METRES", 1100, 413, 23, Color.web("#fff4dc"), true);
-        ArcadeHud.label(gc, "45 SECONDS · 3 HEARTS", 1100, 449, 12, Color.web("#e2d7bd"), true);
-        ArcadeHud.label(gc, "COLLECT · DODGE · CATCH", 1100, 475, 11, Color.web("#e2d7bd"), true);
+        if (hero != null) {
+            int frame = reduced ? 0 : (int) (menuTime * 4) % hero.getFrameCount();
+            hero.drawGrounded(gc, frame, 170, 580, 190);
+        }
+        switch (screen) {
+            case MENU -> kiosk.draw(gc, pixelFontFamily, menuSelection, pressedMenuOption, menuTime, reduced);
+            case HOW_TO_PLAY -> kiosk.help(gc, pixelFontFamily, jump, slide, pointerX, pointerY);
+            case SETTINGS -> kiosk.settings(gc, pixelFontFamily, jump, slide, binding, soundEnabled, reduced, pointerX, pointerY);
+            default -> throw new IllegalArgumentException("Expected a kiosk screen");
+        }
+        gc.restore();
     }
 
     private void arcadeTitle(GraphicsContext gc, String text, double x, double y, int size) {
@@ -411,70 +428,31 @@ public final class GameRenderer {
         gc.restore();
     }
 
-    private void drawMenuBackdrop(GraphicsContext gc) {
-        gc.setFill(new LinearGradient(0, 0, 0, HEIGHT, false, CycleMethod.NO_CYCLE,
-                new Stop(0, Color.rgb(18, 21, 38, 0.3)),
-                new Stop(0.48, Color.rgb(18, 21, 38, 0.22)),
-                new Stop(1, Color.rgb(18, 21, 38, 0.68))));
-        gc.fillRect(0, 0, WIDTH, HEIGHT);
-    }
-
-    private void drawSettings(GraphicsContext gc, String jumpKey, String slideKey, String bindingPrompt) {
-        drawMenuBackdrop(gc);
-        arcadeTitle(gc, "MAKE IT YOUR RUN", 640, 180, 43);
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Consolas", 22));
-        ArcadeHud.panel(gc, 360, 250, 560, 80, bindingPrompt.equals("jump"));
-        ArcadeHud.panel(gc, 360, 360, 560, 80, bindingPrompt.equals("slide"));
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Consolas", 22));
-        ArcadeHud.label(gc,"JUMP   " + (bindingPrompt.equals("jump") ? "PRESS A KEY..." : jumpKey.toUpperCase()),420,295,22,Color.WHITE,false);
-        ArcadeHud.label(gc,"SLIDE   " + (bindingPrompt.equals("slide") ? "PRESS A KEY..." : slideKey.toUpperCase()),420,405,22,Color.WHITE,false);
-        gc.setFill(Color.LIGHTGRAY);
-        gc.setFont(Font.font("Consolas", 17));
-        ArcadeHud.label(gc,"CLICK A CONTROL, THEN PRESS A KEY. J / S SELECTS.",315,590,16,Color.LIGHTGRAY,false);
-        String note = bindingPrompt.equals("reserved") ? "That key is reserved. Choose a different one."
-                : bindingPrompt.equals("unsaved") ? "Could not save settings. Check folder permissions."
-                : "F8 / F9 / P / ESC / ENTER reserved. ENTER / ESC returns.";
-        ArcadeHud.label(gc,note,335,620,16,Color.LIGHTGRAY,false);
-        drawSettingToggle(gc, 460, "F8  SOUND", soundEnabled ? "ON" : "OFF");
-        drawSettingToggle(gc, 514, "F9  REDUCED MOTION", effects.isReducedMotion() ? "ON" : "OFF");
-    }
-
-    private void drawSettingToggle(GraphicsContext gc,double y,String label,String value) {
-        ArcadeHud.panel(gc,360,y,560,42,false);
-        ArcadeHud.label(gc,label,385,y+27,18,Color.web("#efcd8b"),false);
-        ArcadeHud.label(gc,value,838,y+27,18,Color.web("#f4ebd5"),false);
-    }
-
-    private void drawMenuButton(GraphicsContext gc, double y, String label) {
-        boolean hover = pointerX >= 360 && pointerX <= 920 && pointerY >= y && pointerY < y + 66;
-        ArcadeHud.panel(gc, 360, y, 560, 66, y == 280 || hover);
-        ArcadeHud.label(gc, label, 640, y + 41, 21, y == 280 || hover ? Color.web("#263246") : Color.web("#fff0ce"), true);
-    }
-
-    private void drawHowToPlay(GraphicsContext gc,String jumpKey,String slideKey) {
-        drawMenuBackdrop(gc);ArcadeHud.panel(gc,260,225,760,325,false);
-        arcadeTitle(gc,"HOW TO PLAY",640,190,48);
-        String[] lines={jumpKey.toUpperCase()+"  HOLD: HIGH JUMP / TAP: SHORT HOP",
-                slideKey.toUpperCase()+"  SLIDE / FAST-FALL IN THE AIR","P / ESC  PAUSE OR RESUME",
-                "COINS  BUILD A STREAK FOR UP TO 4x POINTS","NAVIGO  FIVE-SECOND COIN MAGNET",
-                "HEARTS  RESTORE A LIFE, UP TO THREE","CATCH  500 m IN 45 SECONDS / ENDLESS: SURVIVE"};
-        for(int i=0;i<lines.length;i++)ArcadeHud.label(gc,lines[i],300,270+i*39,18,
-                i>=3?Color.web("#efcd8b"):Color.web("#f4ebd5"),false);
-        drawButton(gc,470,580,340,"BACK TO MENU");
-    }
-
     private void drawGame(GraphicsContext gc, GameWorld world, String bannerText,
                           double bannerTimer, int endlessHighScore) {
         if (world == null) return;
         gc.save();
         if (cameraMotion) gc.translate(effects.cameraX(), effects.cameraY());
+        gc.setFill(new LinearGradient(0, 405, 0, 630, false, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.TRANSPARENT), new Stop(.66, Color.rgb(15, 22, 36, .26)),
+                new Stop(1, Color.TRANSPARENT)));
+        gc.fillRect(0, 405, WIDTH, 225);
+        pixelRoute.drawEntrance(gc, world);
+        pixelRoute.drawTrain(gc, world, effects.isReducedMotion());
         arcade.coins(gc, world, effects.time(), effects.isReducedMotion());
         arcade.hearts(gc, world, effects.time(), effects.isReducedMotion());
         for (Hazard hazard : world.getHazards()) {
             gc.setFill(Color.rgb(15, 17, 25, .24));
             gc.fillOval(hazard.getX() - 4, GROUND_Y - 3, hazard.getWidth() + 8, 7);
+            if (hazard.getType().equals("OVERHEAD_SIGN")) {
+                double x = Math.rint(hazard.getX()), y = hazard.getY();
+                gc.setFill(Color.web("#222733")); gc.fillRect(x, y - 26, 7, 31);
+                ArcadeHud.panel(gc, x, y, hazard.getWidth(), hazard.getHeight(), true);
+                ArcadeHud.label(gc, "SLIDE", x + 37, y + 19, 15, Color.web("#181f27"), true);
+                gc.setFill(Color.web("#262935"));
+                gc.fillPolygon(new double[]{x + 31, x + 43, x + 37}, new double[]{y + 26, y + 26, y + 34}, 3);
+                continue;
+            }
             if (arcade.hasProps() && (hazard.getType().equals("BARRIER") || hazard.getType().equals("CRATE"))) {
                 gc.setImageSmoothing(false);
                 arcade.prop(gc, hazard.getType().equals("BARRIER") ? 1 : 2,
@@ -529,6 +507,12 @@ public final class GameRenderer {
             double radius = effects.isReducedMotion() ? 46 : 46 + Math.sin(effects.time() * 4) * 4;
             gc.strokeOval(player.getX() + 25 - radius, player.getY() + 30 - radius, radius * 2, radius * 2);
         }
+        double board = world.getBoardingProgress();
+        double entering = world.isTransferring() && world.getTransferProgress() < .5
+                ? Math.min(1, world.getTransferProgress() / .20) : 0;
+        gc.save();
+        gc.setGlobalAlpha(1 - Math.max(board, entering));
+        gc.translate(0, 22 * entering - 7 * board);
         double altitude = Math.max(0, GROUND_Y - player.getY() - player.getHeight());
         gc.setFill(Color.rgb(12, 18, 25, .26 * Math.max(.2, 1 - altitude / 220)));
         gc.fillOval(player.getX() - 9, GROUND_Y - 4, player.getWidth() + 18, 9);
@@ -543,8 +527,8 @@ public final class GameRenderer {
             case "SLIDING" -> SLIDING_BOB[playerAnimation.getCurrentFrame()];
             default -> 0;
         };
-        if (world.isInvulnerable()) gc.setGlobalAlpha(effects.isReducedMotion() ? .65
-                : .55 + .45 * Math.abs(Math.sin(effects.time() * 18)));
+        if (world.isInvulnerable()) gc.setGlobalAlpha(gc.getGlobalAlpha() * (effects.isReducedMotion() ? .65
+                : .55 + .45 * Math.abs(Math.sin(effects.time() * 18))));
         SpriteStrip playerSprite = playerSprites.get(playerAnimation.getCurrentName());
         if (playerSprite == null) {
             gc.fillRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
@@ -564,7 +548,7 @@ public final class GameRenderer {
                 gc.fillOval(player.getX() - 8, GROUND_Y - 7, player.getWidth() + 16, 12);
             }
         }
-        gc.setGlobalAlpha(1.0);
+        gc.restore();
         gc.restore();
         if (!world.isPlayerWon()) effects.drawParticles(gc);
         gc.restore();
@@ -573,9 +557,10 @@ public final class GameRenderer {
         arcadeHud.draw(gc, world, effects.time(), soundEnabled, effects.isReducedMotion(),
                 bannerText, bannerTimer, jumpLabel, slideLabel);
         if (world.isFinaleActive() && !world.isGameOver()) {
-            ArcadeHud.label(gc, "BONUS STATION", 640, 190, 15, Color.web("#fff0c8"), true);
-            ArcadeHud.label(gc, "LAST TRAIN CAUGHT!", 640, 240, 38, Color.web("#ffd171"), true);
-            ArcadeHud.label(gc, "+500", 640, 282, 27, Color.web("#fff0c8"), true);
+            ArcadeHud.panel(gc, 456, 155, 368, 65, false);
+            ArcadeHud.label(gc, "CHÂTELET", 640, 181, 22, Color.web("#ffd171"), true);
+            ArcadeHud.label(gc, board < 1 ? "BOARDING THE LAST MÉTRO" : "ALL ABOARD",
+                    640, 204, 14, Color.web("#fff0c8"), true);
         }
     }
 
@@ -632,17 +617,19 @@ public final class GameRenderer {
         drawButton(gc, 660, 410, 320, "MAIN MENU");
     }
 
-    private void drawResults(GraphicsContext gc, GameWorld world, String reason, int endlessHighScore) {
+    private void drawDefeat(GraphicsContext gc, GameWorld world, int endlessHighScore) {
         drawOverlayPanel(gc);
-        arcadeTitle(gc, world.isPlayerWon() ? "LEVEL COMPLETE!" : "MISSED THE LAST TRAIN", 640, 250, world.isPlayerWon() ? 48 : 37);
-        ArcadeHud.label(gc, world.isPlayerWon() ? "WELCOME ABOARD. PARIS CAN WAIT." : "CATCH YOUR BREATH. GO AGAIN.",
+        arcadeTitle(gc, "MISSED THE LAST TRAIN", 640, 250, 37);
+        ArcadeHud.label(gc, "CATCH YOUR BREATH. GO AGAIN.",
                 640, 292, 14, Color.web("#eadfca"), true);
         ArcadeHud.label(gc, String.format("%,d", world.getScore()), 640, 355, 47, Color.web("#ffd477"), true);
         ArcadeHud.label(gc, "POINTS", 640, 378, 12, Color.web("#eadfca"), true);
         ArcadeHud.label(gc, String.format("%d COINS  ·  %.0f m  ·  BEST STREAK %d", world.getCoinsCollected(), world.getDistanceMeters(), world.getBestCombo()),
                 640, 414, 18, Color.web("#fff0ce"), true);
-        ArcadeHud.label(gc, world.isPlayerWon() ? "+500 LAST TRAIN BONUS" : world.getMode() == GameWorld.Mode.ENDLESS
+        ArcadeHud.label(gc, world.getMode() == GameWorld.Mode.ENDLESS
                 ? "PERSONAL BEST  " + endlessHighScore : "R TO RETRY  ·  M FOR MENU", 640, 452, 14, Color.web("#ffcf77"), true);
+        ArcadeHud.label(gc, String.format("%d CLEAN DODGES  ·  %d PERFECT LANDINGS",
+                world.getCleanDodges(), world.getPerfectLandings()), 640, 567, 12, Color.web("#eadfca"), true);
         drawButton(gc, 300, 485, 320, "TRY AGAIN");
         drawButton(gc, 660, 485, 320, "MAIN MENU");
     }

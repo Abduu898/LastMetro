@@ -1,6 +1,7 @@
 package com.lastmetro.view;
 
 import com.lastmetro.model.GameWorld;
+import com.lastmetro.model.RouteTimeline;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
 import javafx.scene.paint.*;
@@ -52,25 +53,16 @@ public final class ArcadeHud {
 
         if (world.getMode() == GameWorld.Mode.CATCH_THE_METRO) route(gc, world);
         label(gc, com.lastmetro.model.RouteTimeline.label(world.getRouteStage()), 640, 125, 12, IVORY, true);
-        if (world.getCombo() >= 3 && !world.isFinaleActive()) {
-            panel(gc, 26, 115, 180, 47, false);
-            label(gc, world.getCombo() + " COIN STREAK", 40, 137, 13, GOLD, false);
-            gc.setFill(Color.rgb(255, 220, 139, .18)); gc.fillRoundRect(40, 147, 150, 4, 2, 2);
-            gc.setFill(GOLD); gc.fillRoundRect(40, 147, 150 * world.getComboProgress(), 4, 2, 2);
-        }
-        if (world.getPlayer().isConfused() || world.getPlayer().isSlowed()) {
-            panel(gc, 26, 174, 180, 34, false);
-            label(gc, world.getPlayer().isConfused() ? "CONTROLS REVERSED!" : "SLOWED DOWN", 40, 197, 12, GOLD, false);
-        }
-        if (world.getMagnetTime() > 0) {
-            panel(gc, 26, 219, 180, 34, false);
-            label(gc, "NAVIGO MAGNET  " + (int) Math.ceil(world.getMagnetTime()) + "s", 40, 242, 12,
-                    Color.web("#a6e3ff"), false);
-        }
-        if (bannerTimer > 0 && !banner.isEmpty() && !world.isGameOver()) {
+        String status = world.getPlayer().isSlowed() ? "SLOWED"
+                : world.getMagnetTime() > 0 ? "MAGNET " + (int) Math.ceil(world.getMagnetTime()) + "s"
+                : world.getCombo() >= 3 ? world.getCombo() + " STREAK" : "";
+        if (!status.isEmpty()) label(gc, status, 101, 107, 13, GOLD, false);
+        if (world.getDodgeNoticeTime() > 0 && !world.isFinaleActive())
+            label(gc, "DODGE +15", 1187, 106, 12, GOLD, false, TextAlignment.RIGHT);
+        if (bannerTimer > 0 && !banner.isEmpty() && !world.isGameOver() && !world.isFinaleActive()) {
             gc.save(); gc.setGlobalAlpha(Math.min(1, bannerTimer * 2));
             panel(gc, 320, 650, 640, 37, false);
-            label(gc, banner, 640, 674, 14, IVORY, true); gc.restore();
+            label(gc, banner, 640, 674, 13, IVORY, true); gc.restore();
         }
         label(gc, jump.toUpperCase() + "  JUMP     " + slide.toUpperCase() + "  SLIDE", 27, 701, 11, IVORY, false);
         label(gc, "F8 SOUND " + (sound ? "ON" : "OFF") + "   F9 MOTION " + (lowMotion ? "LOW" : "FULL"),
@@ -85,8 +77,12 @@ public final class ArcadeHud {
         gc.setFill(GOLD); gc.fillRoundRect(x + 2, y + 2, (width - 4) * progress, 8, 4, 4);
         double marker = x + 6 + (width - 12) * progress;
         gc.setFill(IVORY); gc.fillOval(marker - 4, y - 5, 8, 8);
-        gc.setStroke(GOLD); gc.strokeLine(640, y - 11, 640, y + 5);
-        gc.strokePolygon(new double[] {640, 645, 640, 635}, new double[] {y - 20, y - 15, y - 10, y - 15}, 4);
+        gc.setStroke(GOLD);
+        for (double checkpoint : new double[] {RouteTimeline.FIRST_STREET_END, RouteTimeline.SECOND_STREET_END}) {
+            double stop = x + width * checkpoint / GameWorld.NORMAL_GOAL_METERS;
+            gc.strokeLine(stop, y - 8, stop, y + 10);
+            gc.strokeRect(stop - 3, y - 13, 6, 6);
+        }
         gc.setFill(Color.web("#263f4d")); gc.fillRoundRect(838, 65, 39, 25, 6, 6);
         gc.setStroke(IVORY); gc.strokeRoundRect(838, 65, 39, 25, 6, 6);
         gc.setFill(Color.web("#a4e1e6")); for (int i = 0; i < 3; i++) gc.fillRect(843 + i * 10, 70, 7, 10);

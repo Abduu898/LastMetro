@@ -1,15 +1,9 @@
 package com.lastmetro.patterns.factory;
 
-import com.lastmetro.model.DogPoop;
-import com.lastmetro.model.EScooter;
-import com.lastmetro.model.Hazard;
-import com.lastmetro.model.Pigeon;
-import com.lastmetro.model.StreetObstacle;
-
 import java.util.Random;
 
 /**
- * Factory Pattern responsible for instantiating Parisian obstacles.
+ * Chooses a route pattern from the current section without repeating a draw.
  */
 public class HazardFactory {
     private final Random random;
@@ -22,14 +16,21 @@ public class HazardFactory {
         this.random = random;
     }
 
-    public Hazard createRandomHazard(double spawnX, double groundY) {
-        int roll = random.nextInt(5);
-        return switch (roll) {
-            case 0 -> new DogPoop(spawnX, groundY);
-            case 1 -> new EScooter(spawnX, groundY);
-            case 2 -> new Pigeon(spawnX, groundY);
-            case 3 -> new StreetObstacle(spawnX, groundY, false);
-            default -> new StreetObstacle(spawnX, groundY, true);
+    public enum Pattern { TOKENS, BARRIER, CRATE, SCOOTER, SKID, TRANSFER, PIGEON, PLATFORM, RECOVERY, EMPTY }
+
+    public Pattern choosePattern(int stage, boolean opening, Pattern previous) {
+        if (opening) return switch (stage) {
+            case 0 -> Pattern.TOKENS;
+            case 1 -> Pattern.TRANSFER;
+            default -> Pattern.PLATFORM;
         };
+        Pattern[] choices = switch (stage) {
+            case 0 -> new Pattern[] {Pattern.BARRIER, Pattern.CRATE, Pattern.SCOOTER, Pattern.SKID, Pattern.RECOVERY};
+            case 1 -> new Pattern[] {Pattern.TRANSFER, Pattern.PIGEON, Pattern.BARRIER, Pattern.RECOVERY};
+            default -> new Pattern[] {Pattern.PLATFORM, Pattern.PIGEON, Pattern.TRANSFER, Pattern.RECOVERY};
+        };
+        int index = random.nextInt(choices.length);
+        if (choices[index] == previous) index = (index + 1) % choices.length;
+        return choices[index];
     }
 }

@@ -11,6 +11,8 @@ import com.lastmetro.view.GameRenderer;
 import com.lastmetro.view.GameScreen;
 import com.lastmetro.view.GameViewport;
 import com.lastmetro.view.ArcadeHud;
+import com.lastmetro.view.VictoryTicket;
+import com.lastmetro.view.TicketKiosk;
 import com.lastmetro.audio.GameAudio;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
@@ -18,6 +20,8 @@ import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseButton;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
@@ -42,6 +46,8 @@ public class MainApp extends Application implements GameObserver {
     private String bindingPrompt = "";
     private int endlessHighScore = highScoreStore.load();
     private GameAudio audio;
+    private Rectangle2D mousePressedTicketButton;
+    private int menuSelection, pressedMenuOption = -1;
     private final java.util.Set<KeyCode> heldKeys = new java.util.HashSet<>();
 
     private final GameRenderer renderer = new GameRenderer();
@@ -64,24 +70,54 @@ public class MainApp extends Application implements GameObserver {
             if (heldKeys.add(event.getCode())) handleKeyPressed(event.getCode());
         });
         scene.setOnKeyReleased(event -> {
-            heldKeys.remove(event.getCode());
+            boolean wasHeld = heldKeys.remove(event.getCode());
+            if (wasHeld && isVictoryTicket() && !screenTransition.isRunning()) {
+                Rectangle2D action = ticketShortcut(event.getCode());
+                if (action != null) {
+                    activateTicketAction(action);
+                    return;
+                }
+            }
             if (screen != GameScreen.PLAYING || screenTransition.isRunning() || world.isFinaleActive() || world.isTransferring()) return;
             if (isJumpKey(event.getCode())) world.getPlayer().onJumpReleased();
             else if (isSlideKey(event.getCode())) world.getPlayer().onSlideChanged(false);
         });
-        scene.setOnMouseClicked(event -> handleMouseClick(event.getX(), event.getY()));
+        scene.setOnMousePressed(event -> {
+            if (isVictoryTicket() && !screenTransition.isRunning() && event.getButton() == MouseButton.PRIMARY)
+                mousePressedTicketButton = ticketButtonAt(viewport.toLogicalX(event.getX()), viewport.toLogicalY(event.getY()));
+            if (screen == GameScreen.MENU && !screenTransition.isRunning() && event.getButton() == MouseButton.PRIMARY)
+                pressedMenuOption = TicketKiosk.optionAt(viewport.toLogicalX(event.getX()), viewport.toLogicalY(event.getY()));
+        });
+        scene.setOnMouseReleased(event -> {
+            mousePressedTicketButton = null;
+            if (!screenTransition.isRunning()) pressedMenuOption = -1;
+        });
+        scene.setOnMouseClicked(event -> {
+            if (event.getButton() == MouseButton.PRIMARY)
+                handleMouseClick(event.getX(), event.getY());
+        });
         scene.setOnMouseMoved(event -> {
             double x = viewport.toLogicalX(event.getX()), y = viewport.toLogicalY(event.getY());
             renderer.setPointer(x, y);
+            int option = TicketKiosk.optionAt(x, y);
+            if (screen == GameScreen.MENU && option >= 0 && !screenTransition.isRunning()) selectMenuOption(option, true);
             boolean pointer = screen == GameScreen.PLAYING ? ArcadeHud.hitsPause(x, y)
-                    : screen == GameScreen.MENU ? x >= 360 && x < 920 && y >= 280 && y < 586
-                    : screen == GameScreen.SETTINGS ? x >= 360 && x < 920 && y >= 250 && y < 556
+                    : screen == GameScreen.MENU ? option >= 0
+                    : screen == GameScreen.HOW_TO_PLAY ? TicketKiosk.BACK.contains(x, y)
+                    : screen == GameScreen.SETTINGS ? TicketKiosk.BACK.contains(x, y)
+                    || TicketKiosk.JUMP.contains(x, y) || TicketKiosk.SLIDE.contains(x, y)
+                    || TicketKiosk.SOUND.contains(x, y) || TicketKiosk.MOTION.contains(x, y)
+                    : isVictoryTicket() ? ticketButtonAt(x, y) != null
                     : screen == GameScreen.PAUSED || screen == GameScreen.RESULTS;
             scene.setCursor(pointer ? javafx.scene.Cursor.HAND : javafx.scene.Cursor.DEFAULT);
         });
 
         stage.focusedProperty().addListener((observable, wasFocused, isFocused) -> {
-            if (!isFocused) heldKeys.clear();
+            if (!isFocused) {
+                heldKeys.clear();
+                mousePressedTicketButton = null;
+                if (!screenTransition.isRunning()) pressedMenuOption = -1;
+            }
             if (!isFocused && world != null) {
                 world.getPlayer().releaseInputs();
                 simulationClock.reset();
@@ -109,6 +145,7 @@ public class MainApp extends Application implements GameObserver {
                 screenTransition.update(Math.min(deltaTime, 0.25));
                 renderer.updateUi(Math.min(deltaTime, .1), screen == GameScreen.RESULTS);
                 audio.setActive(screen == GameScreen.PLAYING || screen == GameScreen.RESULTS);
+                if (isVictoryTicket()) audio.playTicketCue(renderer.updateVictory(Math.min(deltaTime, .1)));
 
                 if (screen == GameScreen.PLAYING && world != null && !screenTransition.isRunning()) {
                     updateSimulation(deltaTime);
@@ -147,6 +184,15 @@ public class MainApp extends Application implements GameObserver {
         gc.save();
         gc.translate(viewport.getOffsetX(), viewport.getOffsetY());
         gc.scale(viewport.getScale(), viewport.getScale());
+        Rectangle2D pressed = isVictoryTicket() ? mousePressedTicketButton : null;
+        if (isVictoryTicket() && pressed == null && !screenTransition.isRunning()) {
+            for (KeyCode key : heldKeys) {
+                pressed = ticketShortcut(key);
+                if (pressed != null) break;
+            }
+        }
+        renderer.setPressedResultButton(pressed);
+        renderer.setKioskSelection(menuSelection, pressedMenuOption);
         renderer.render(gc, screen, world, bannerText, bannerTimer, gameOverReason,
                 endlessHighScore, settings.jumpKey().getName(), settings.slideKey().getName(),
                 bindingPrompt, screenTransition.getAlpha());
@@ -161,7 +207,7 @@ public class MainApp extends Application implements GameObserver {
             handleKeyPressed(KeyCode.P); return;
         }
         if (screen == GameScreen.HOW_TO_PLAY) {
-            if (logicalX >= 470 && logicalX < 810 && logicalY >= 580 && logicalY < 644) {
+            if (TicketKiosk.BACK.contains(logicalX, logicalY)) {
                 transitionTo(() -> screen = GameScreen.MENU);
             }
             return;
@@ -174,6 +220,11 @@ public class MainApp extends Application implements GameObserver {
             }
             return;
         }
+        if (isVictoryTicket()) {
+            Rectangle2D action = ticketButtonAt(logicalX, logicalY);
+            if (action != null) activateTicketAction(action);
+            return;
+        }
         if (screen == GameScreen.RESULTS) {
             if (logicalY >= 485 && logicalY < 549 && logicalX >= 300 && logicalX < 620) {
                 transitionTo(() -> startGame(world.getMode()));
@@ -182,23 +233,40 @@ public class MainApp extends Application implements GameObserver {
             }
             return;
         }
-        if (screen != GameScreen.MENU && screen != GameScreen.SETTINGS) return;
         if (screen == GameScreen.SETTINGS) {
-            if (logicalX >= 360 && logicalX < 920 && logicalY >= 250 && logicalY < 330) bindingPrompt = "jump";
-            else if (logicalX >= 360 && logicalX < 920 && logicalY >= 360 && logicalY < 440) bindingPrompt = "slide";
-            else if (logicalX >= 360 && logicalX < 920 && logicalY >= 460 && logicalY < 502) toggleSound();
-            else if (logicalX >= 360 && logicalX < 920 && logicalY >= 514 && logicalY < 556) toggleMotion();
-            return;
+            if (TicketKiosk.JUMP.contains(logicalX, logicalY)) bindingPrompt = "jump";
+            else if (TicketKiosk.SLIDE.contains(logicalX, logicalY)) bindingPrompt = "slide";
+            else if (TicketKiosk.SOUND.contains(logicalX, logicalY)) toggleSound();
+            else if (TicketKiosk.MOTION.contains(logicalX, logicalY)) toggleMotion();
+            else if (TicketKiosk.BACK.contains(logicalX, logicalY)) transitionTo(() -> screen = GameScreen.MENU);
+        } else if (screen == GameScreen.MENU) {
+            int option = TicketKiosk.optionAt(logicalX, logicalY);
+            if (option >= 0) activateMenuOption(option);
         }
-        if (logicalX >= 360 && logicalX < 920 && logicalY >= 280 && logicalY < 346) {
-            transitionTo(() -> startGame(GameWorld.Mode.CATCH_THE_METRO));
-        } else if (logicalX >= 360 && logicalX < 920 && logicalY >= 360 && logicalY < 426) {
-            transitionTo(() -> startGame(GameWorld.Mode.ENDLESS));
-        } else if (logicalX >= 360 && logicalX < 920 && logicalY >= 440 && logicalY < 506) {
-            transitionTo(() -> screen = GameScreen.HOW_TO_PLAY);
-        } else if (logicalX >= 360 && logicalX < 920 && logicalY >= 520 && logicalY < 586) {
-            openSettings();
-        }
+    }
+
+    private void selectMenuOption(int option, boolean tick) {
+        if (menuSelection != option && tick) audio.playKioskCue(false);
+        menuSelection = option;
+    }
+
+    private void activateMenuOption(int option) {
+        selectMenuOption(option, false);
+        pressedMenuOption = option;
+        audio.playKioskCue(true);
+        transitionTo(() -> {
+            pressedMenuOption = -1;
+            switch (option) {
+                case 0 -> startGame(GameWorld.Mode.CATCH_THE_METRO);
+                case 1 -> startGame(GameWorld.Mode.ENDLESS);
+                case 2 -> screen = GameScreen.HOW_TO_PLAY;
+                case 3 -> {
+                    bindingPrompt = "";
+                    screen = GameScreen.SETTINGS;
+                }
+                default -> throw new IllegalArgumentException("Unknown kiosk option");
+            }
+        });
     }
 
     private void handleKeyPressed(KeyCode code) {
@@ -206,14 +274,15 @@ public class MainApp extends Application implements GameObserver {
         if (code == KeyCode.F9) { toggleMotion(); return; }
         if (screenTransition.isRunning()) return;
         if (screen == GameScreen.MENU) {
-            if (code == KeyCode.DIGIT1 || code == KeyCode.NUMPAD1 || code == KeyCode.ENTER) {
-                transitionTo(() -> startGame(GameWorld.Mode.CATCH_THE_METRO));
-            } else if (code == KeyCode.DIGIT2 || code == KeyCode.NUMPAD2) {
-                transitionTo(() -> startGame(GameWorld.Mode.ENDLESS));
-            } else if (code == KeyCode.H) {
-                transitionTo(() -> screen = GameScreen.HOW_TO_PLAY);
-            } else if (code == KeyCode.O) {
-                openSettings();
+            switch (code) {
+                case UP, W -> selectMenuOption(Math.floorMod(menuSelection - 1, TicketKiosk.OPTIONS), true);
+                case DOWN, S -> selectMenuOption((menuSelection + 1) % TicketKiosk.OPTIONS, true);
+                case ENTER, SPACE -> activateMenuOption(menuSelection);
+                case DIGIT1, NUMPAD1 -> activateMenuOption(0);
+                case DIGIT2, NUMPAD2 -> activateMenuOption(1);
+                case H -> activateMenuOption(2);
+                case O -> activateMenuOption(3);
+                default -> {}
             }
             return;
         }
@@ -239,6 +308,7 @@ public class MainApp extends Application implements GameObserver {
             }
             return;
         }
+        if (isVictoryTicket()) return; // Commit ticket actions on key release so the bevel can depress.
         if (screen == GameScreen.RESULTS) {
             if (code == KeyCode.R) {
                 transitionTo(() -> startGame(world.getMode()));
@@ -262,11 +332,26 @@ public class MainApp extends Application implements GameObserver {
         }
     }
 
-    private void openSettings() {
-        transitionTo(() -> {
-            bindingPrompt = "";
-            screen = GameScreen.SETTINGS;
-        });
+    private boolean isVictoryTicket() {
+        return screen == GameScreen.RESULTS && world != null && world.isPlayerWon();
+    }
+
+    private static Rectangle2D ticketButtonAt(double x, double y) {
+        if (VictoryTicket.RETRY.contains(x, y)) return VictoryTicket.RETRY;
+        return VictoryTicket.MENU.contains(x, y) ? VictoryTicket.MENU : null;
+    }
+
+    private static Rectangle2D ticketShortcut(KeyCode key) {
+        return switch (key) {
+            case R, ENTER, SPACE -> VictoryTicket.RETRY;
+            case M, ESCAPE -> VictoryTicket.MENU;
+            default -> null;
+        };
+    }
+
+    private void activateTicketAction(Rectangle2D action) {
+        if (action == VictoryTicket.RETRY) transitionTo(() -> startGame(world.getMode()));
+        else transitionTo(() -> screen = GameScreen.MENU);
     }
 
     private boolean isJumpKey(KeyCode code) {
@@ -290,8 +375,18 @@ public class MainApp extends Application implements GameObserver {
         }
     }
 
+    private boolean catchAttempted;
+    private boolean endlessAttempted;
+
     private void startGame(GameWorld.Mode mode) {
         world = new GameWorld(WIDTH, GROUND_Y, mode);
+        if (mode == GameWorld.Mode.CATCH_THE_METRO) {
+            if (catchAttempted) world.useQuickTransfers();
+            catchAttempted = true;
+        } else {
+            if (endlessAttempted) world.useQuickTransfers();
+            endlessAttempted = true;
+        }
         world.addObserver(this);
         simulationClock.reset();
         renderer.resetAnimations();
@@ -331,7 +426,8 @@ public class MainApp extends Application implements GameObserver {
     @Override
     public void onSarcasticEvent(String message) {
         bannerText = message;
-        bannerTimer = 3.0;
+        bannerTimer = message.contains("HEARTS:") || message.startsWith("CLEAN SECTION") ? 2.0 : 1.2;
+        if (message.contains("HEARTS:")) bannerText = "HIT  ·  " + world.getHearts() + " / " + GameWorld.MAX_HEARTS + " HEARTS";
     }
 
     @Override

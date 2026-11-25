@@ -8,7 +8,7 @@ import java.util.List;
 public final class RunFeedback {
     public enum Event { JUMP, LAND, STEP, SLIDE, TICKET, COIN, HEART, HIT, WARNING, HURRY,
         TRAIN_ARRIVE, DOORS, TRAIN_DEPART, WIN, LOSE }
-    private int tickets, second = 45;
+    private int tickets, second = (int) GameWorld.INITIAL_TIME;
     private int coins;
     private int heartsCollected, hits;
     private boolean airborne, sliding, hurry, finale, doors, departure, ended;
@@ -19,7 +19,7 @@ public final class RunFeedback {
         var player = world.getPlayer();
         boolean inAir = player.getCurrentState().getStateName().equals("JUMPING");
         boolean inSlide = player.getCurrentState().getStateName().equals("SLIDING");
-        if (!world.isGameOver() && !world.isTransferring()) {
+        if (!world.isGameOver() && !world.isTransferring() && world.getBoardingProgress() < .8) {
             if (inAir && !airborne) events.add(Event.JUMP);
             if (!inAir && airborne) events.add(Event.LAND);
             if (inSlide && !sliding) events.add(Event.SLIDE);
@@ -40,7 +40,7 @@ public final class RunFeedback {
         }
         if (world.isFinaleActive() && !finale) { events.add(Event.TRAIN_ARRIVE); finale = true; }
         if (world.getMetroDoorProgress() > 0 && !doors) { events.add(Event.DOORS); doors = true; }
-        if (world.getMetroDoorProgress() >= 1 && !departure) { events.add(Event.TRAIN_DEPART); departure = true; }
+        if (world.isFinaleActive() && world.getMetroTrainX() > GameWorld.TRAIN_STOP_X && !departure) { events.add(Event.TRAIN_DEPART); departure = true; }
         if (world.isGameOver() && !ended) { events.add(world.isPlayerWon() ? Event.WIN : Event.LOSE); ended = true; }
         tickets = world.getTicketsCollected(); second = now;
         coins = world.getCoinsCollected();
@@ -50,7 +50,7 @@ public final class RunFeedback {
     }
 
     public void reset() {
-        tickets = coins = 0; second = 45; stepClock = 0;
+        tickets = coins = 0; second = (int) GameWorld.INITIAL_TIME; stepClock = 0;
         heartsCollected = hits = 0;
         airborne = sliding = hurry = finale = doors = departure = ended = false;
     }

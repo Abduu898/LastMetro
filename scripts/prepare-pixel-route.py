@@ -4,7 +4,7 @@ No resampling, painting, or new image generation: source pixels are preserved.
 """
 from pathlib import Path
 from collections import deque
-from PIL import Image
+from PIL import Image, ImageDraw
 import json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +67,33 @@ def main():
             r,g,b,a=cp[x,y]
             if g < r+5 or g < b+5: cp[x,y]=(r,g,b,0)
     crown.save(OUTPUT/'leaf-crown.png')
+    # Isolate the supplied train from the platform so it can actually depart.
+    train = Image.open(OUTPUT/'underground-front.png').crop((1922, 40, 2649, 365))
+    mask = Image.new('L', train.size)
+    ImageDraw.Draw(mask).polygon([(0,20),(24,6),(80,2),(726,2),(726,300),
+        (310,300),(304,317),(290,323),(88,323),(76,313),(76,294),
+        (38,294),(38,262),(5,247),(0,224)], fill=255)
+    train.putalpha(mask)
+    paint = ImageDraw.Draw(train)
+    for left, right in [(157,191),(215,249),(505,533),(562,592)]:
+        paint.rectangle((left,62,right,130), fill='#273a39')
+        paint.rectangle((left+3,65,right-3,70), fill='#729594')
+        paint.line((left+4,113,right-4,91), fill='#476569', width=2)
+    for left, right in [(320,445),(669,726)]:
+        paint.rectangle((left,62,right,135), fill='#283a3d')
+        paint.rectangle((left,65,right,83), fill='#3a5357')
+        paint.line((left,98,right,98), fill='#7d8e83', width=3)
+        paint.line((left,118,right,118), fill='#526065', width=2)
+        paint.polygon([(left+7,92),(left+39,68),(left+46,68),(left+14,92)], fill='#597475')
+    train.save(OUTPUT/'metro-car.png')
+
+    entrance = Image.open(OUTPUT/'street-walkway.png').crop((2180,0,2568,341))
+    street_mask = Image.new('L', entrance.size)
+    ImageDraw.Draw(street_mask).polygon([(89,0),(118,0),(127,8),(155,3),(311,3),
+        (330,20),(339,0),(365,0),(366,280),(352,299),(94,299),(87,277)], fill=255)
+    from PIL import ImageChops
+    entrance.putalpha(ImageChops.multiply(street_mask, entrance.getchannel('A')))
+    entrance.save(OUTPUT/'metro-entrance.png')
     (OUTPUT/'sources.json').write_text(json.dumps(manifest, indent=2))
 
 if __name__ == '__main__': main()
