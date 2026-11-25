@@ -10,6 +10,8 @@ import com.lastmetro.patterns.observer.GameObserver;
 import com.lastmetro.view.GameRenderer;
 import com.lastmetro.view.GameScreen;
 import com.lastmetro.view.GameViewport;
+import com.lastmetro.view.ArcadeHud;
+import com.lastmetro.audio.GameAudio;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.scene.Scene;
@@ -25,7 +27,7 @@ import java.nio.file.Path;
 public class MainApp extends Application implements GameObserver {
     public static final int WIDTH = 1280;
     public static final int HEIGHT = 720;
-    public static final double GROUND_Y = 554.0;
+    public static final double GROUND_Y = 576.0;
 
     private GameWorld world;
     private GameScreen screen = GameScreen.MENU;
@@ -39,6 +41,8 @@ public class MainApp extends Application implements GameObserver {
     private GameSettings settings = settingsStore.load();
     private String bindingPrompt = "";
     private int endlessHighScore = highScoreStore.load();
+    private GameAudio audio;
+    private final java.util.Set<KeyCode> heldKeys = new java.util.HashSet<>();
 
     private final GameRenderer renderer = new GameRenderer();
     private final FixedStepAccumulator simulationClock = new FixedStepAccumulator();
@@ -48,24 +52,44 @@ public class MainApp extends Application implements GameObserver {
     @Override
     public void start(Stage stage) {
         renderer.loadAssets();
+        renderer.setPresentationSettings(settings.soundEnabled(), settings.reducedMotion());
+        audio = new GameAudio(settings.soundEnabled());
         Canvas canvas = new Canvas(WIDTH, HEIGHT);
         Pane root = new Pane(canvas);
         canvas.widthProperty().bind(root.widthProperty());
         canvas.heightProperty().bind(root.heightProperty());
         Scene scene = new Scene(root, WIDTH, HEIGHT);
 
-        scene.setOnKeyPressed(event -> handleKeyPressed(event.getCode()));
+        scene.setOnKeyPressed(event -> {
+            if (heldKeys.add(event.getCode())) handleKeyPressed(event.getCode());
+        });
         scene.setOnKeyReleased(event -> {
-            if (screen != GameScreen.PLAYING || screenTransition.isRunning() || world.isFinaleActive()) return;
+            heldKeys.remove(event.getCode());
+            if (screen != GameScreen.PLAYING || screenTransition.isRunning() || world.isFinaleActive() || world.isTransferring()) return;
             if (isJumpKey(event.getCode())) world.getPlayer().onJumpReleased();
             else if (isSlideKey(event.getCode())) world.getPlayer().onSlideChanged(false);
         });
         scene.setOnMouseClicked(event -> handleMouseClick(event.getX(), event.getY()));
+        scene.setOnMouseMoved(event -> {
+            double x = viewport.toLogicalX(event.getX()), y = viewport.toLogicalY(event.getY());
+            renderer.setPointer(x, y);
+            boolean pointer = screen == GameScreen.PLAYING ? ArcadeHud.hitsPause(x, y)
+                    : screen == GameScreen.MENU ? x >= 360 && x < 920 && y >= 280 && y < 586
+                    : screen == GameScreen.SETTINGS ? x >= 360 && x < 920 && y >= 250 && y < 556
+                    : screen == GameScreen.PAUSED || screen == GameScreen.RESULTS;
+            scene.setCursor(pointer ? javafx.scene.Cursor.HAND : javafx.scene.Cursor.DEFAULT);
+        });
 
         stage.focusedProperty().addListener((observable, wasFocused, isFocused) -> {
+            if (!isFocused) heldKeys.clear();
             if (!isFocused && world != null) {
                 world.getPlayer().releaseInputs();
                 simulationClock.reset();
+                if (screen == GameScreen.PLAYING && !world.isGameOver()) {
+                    screenTransition.cancel();
+                    screen = GameScreen.PAUSED;
+                    audio.setActive(false);
+                }
             }
         });
 
@@ -83,7 +107,8 @@ public class MainApp extends Application implements GameObserver {
                 double deltaTime = lastTime == 0 ? 0 : (now - lastTime) / 1_000_000_000.0;
                 lastTime = now;
                 screenTransition.update(Math.min(deltaTime, 0.25));
-                renderer.updateUi(deltaTime);
+                renderer.updateUi(Math.min(deltaTime, .1), screen == GameScreen.RESULTS);
+                audio.setActive(screen == GameScreen.PLAYING || screen == GameScreen.RESULTS);
 
                 if (screen == GameScreen.PLAYING && world != null && !screenTransition.isRunning()) {
                     updateSimulation(deltaTime);
@@ -102,7 +127,7 @@ public class MainApp extends Application implements GameObserver {
             double step = FixedStepAccumulator.STEP_SECONDS;
             if (bannerTimer > 0) bannerTimer = Math.max(0, bannerTimer - step);
             world.update(step);
-            renderer.update(world, step);
+            for (var event : renderer.update(world, step)) audio.event(event);
         }
 
         if (world.isGameOver() && !screenTransition.isRunning()) {
@@ -132,6 +157,9 @@ public class MainApp extends Application implements GameObserver {
         if (screenTransition.isRunning() || !viewport.contains(x, y)) return;
         double logicalX = viewport.toLogicalX(x);
         double logicalY = viewport.toLogicalY(y);
+        if (screen == GameScreen.PLAYING && ArcadeHud.hitsPause(logicalX, logicalY)) {
+            handleKeyPressed(KeyCode.P); return;
+        }
         if (screen == GameScreen.HOW_TO_PLAY) {
             if (logicalX >= 470 && logicalX < 810 && logicalY >= 580 && logicalY < 644) {
                 transitionTo(() -> screen = GameScreen.MENU);
@@ -158,6 +186,8 @@ public class MainApp extends Application implements GameObserver {
         if (screen == GameScreen.SETTINGS) {
             if (logicalX >= 360 && logicalX < 920 && logicalY >= 250 && logicalY < 330) bindingPrompt = "jump";
             else if (logicalX >= 360 && logicalX < 920 && logicalY >= 360 && logicalY < 440) bindingPrompt = "slide";
+            else if (logicalX >= 360 && logicalX < 920 && logicalY >= 460 && logicalY < 502) toggleSound();
+            else if (logicalX >= 360 && logicalX < 920 && logicalY >= 514 && logicalY < 556) toggleMotion();
             return;
         }
         if (logicalX >= 360 && logicalX < 920 && logicalY >= 280 && logicalY < 346) {
@@ -172,6 +202,8 @@ public class MainApp extends Application implements GameObserver {
     }
 
     private void handleKeyPressed(KeyCode code) {
+        if (code == KeyCode.F8) { toggleSound(); return; }
+        if (code == KeyCode.F9) { toggleMotion(); return; }
         if (screenTransition.isRunning()) return;
         if (screen == GameScreen.MENU) {
             if (code == KeyCode.DIGIT1 || code == KeyCode.NUMPAD1 || code == KeyCode.ENTER) {
@@ -222,8 +254,10 @@ public class MainApp extends Application implements GameObserver {
                 screen = GameScreen.PAUSED;
             });
         } else if (isJumpKey(code)) {
+            if (world.isFinaleActive() || world.isTransferring()) return;
             world.getPlayer().onJumpPressed();
         } else if (isSlideKey(code)) {
+            if (world.isFinaleActive() || world.isTransferring()) return;
             world.getPlayer().onSlideChanged(true);
         }
     }
@@ -262,6 +296,8 @@ public class MainApp extends Application implements GameObserver {
         simulationClock.reset();
         renderer.resetAnimations();
         screen = GameScreen.PLAYING;
+        audio.setActive(true);
+        audio.startRun(mode == GameWorld.Mode.CATCH_THE_METRO);
         bannerText = mode == GameWorld.Mode.ENDLESS
                 ? "Endless Commute — survive and set a distance record!"
                 : "Catch the Last Metro — reach 500 m before time runs out!";
@@ -273,6 +309,24 @@ public class MainApp extends Application implements GameObserver {
         simulationClock.reset();
         screenTransition.start(action);
     }
+
+    private void toggleSound() {
+        settings = settings.withSoundEnabled(!settings.soundEnabled());
+        audio.setEnabled(settings.soundEnabled());
+        savePresentationSettings();
+    }
+
+    private void toggleMotion() {
+        settings = settings.withReducedMotion(!settings.reducedMotion());
+        savePresentationSettings();
+    }
+
+    private void savePresentationSettings() {
+        renderer.setPresentationSettings(settings.soundEnabled(), settings.reducedMotion());
+        if (!settingsStore.save(settings)) bindingPrompt = "unsaved";
+    }
+
+    @Override public void stop() { if (audio != null) audio.close(); }
 
     @Override
     public void onSarcasticEvent(String message) {

@@ -10,7 +10,7 @@ class GameWorldTest {
     void catchTheMetroModeEndsWithAWinWhenTheCommuterKeepsAHeart() {
         GameWorld world = new GameWorld(1280, 580, GameWorld.Mode.CATCH_THE_METRO);
 
-        world.update(43.0);
+        world.update(43.0 + 2 * RouteTimeline.TRANSFER_SECONDS);
         world.update(0.6);
         world.update(0.01);
         assertTrue(world.isFinaleActive());
@@ -30,8 +30,9 @@ class GameWorldTest {
     @Test
     void catchTheMetroModeLosesIfTimeRunsOutBeforeTheGoal() {
         GameWorld world = new GameWorld(1280, 580, GameWorld.Mode.CATCH_THE_METRO);
+        world.getPlayer().applySlowDebuff(100);
 
-        world.update(GameWorld.INITIAL_TIME);
+        world.update(GameWorld.INITIAL_TIME + 2 * RouteTimeline.TRANSFER_SECONDS);
 
         assertTrue(world.isGameOver());
         assertFalse(world.isPlayerWon());

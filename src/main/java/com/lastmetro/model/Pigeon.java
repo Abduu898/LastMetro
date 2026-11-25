@@ -10,7 +10,7 @@ public class Pigeon extends Hazard {
     @Override
     public String onCollide(Commuter player) {
         player.applySlowDebuff(2.0);
-        return "Un pigeon parisien t'a attaqué en piqué !";
+        return "Pigeon collision! Slide under the next one.";
     }
 
     @Override

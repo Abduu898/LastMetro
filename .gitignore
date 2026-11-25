@@ -1,4 +1,7 @@
 target/
+# Local, discarded art experiments are not part of the shipped game.
+/raw_assets/illustrated-experiment/
+/docs/ARCADE_ART.json
 .lastmetro-package-backup-*/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

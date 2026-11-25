@@ -10,7 +10,7 @@ public class EScooter extends Hazard {
     @Override
     public String onCollide(Commuter player) {
         player.applySlowDebuff(2.5);
-        return "Trottinette Lime sur le trottoir : vitesse réduite !";
+        return "Scooter collision! Slowed down for 2.5 seconds.";
     }
 
     @Override

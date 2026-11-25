@@ -49,7 +49,7 @@ class GameWorldBalanceTest {
         world.addObserver(new GameObserver() {
             @Override
             public void onSarcasticEvent(String message) {
-                if (message.contains("Cœurs")) events.add(message + " @ "
+                if (message.contains("HEARTS:")) events.add(message + " @ "
                         + Math.round(world.getDistanceMeters()) + "m playerY="
                         + Math.round(world.getPlayer().getY()) + " state="
                         + world.getPlayer().getCurrentState().getStateName());
@@ -60,7 +60,7 @@ class GameWorldBalanceTest {
         });
         Hazard target = null;
         boolean actionUsesJumpKey = false;
-        int steps = (int) Math.ceil(maxSeconds / STEP);
+        int steps = (int) Math.ceil((maxSeconds + 2 * RouteTimeline.TRANSFER_SECONDS) / STEP);
 
         for (int frame = 0; frame < steps && !world.isGameOver(); frame++) {
             if (target == null) {

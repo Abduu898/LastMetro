@@ -2,7 +2,7 @@ name: Java CI & JaCoCo Coverage
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'codex/**' ]
   pull_request:
     branches: [ main, master ]
 
@@ -23,3 +23,20 @@ jobs:
 
       - name: Run Unit Tests & Generate JaCoCo Report
         run: xvfb-run -a mvn -B test jacoco:report
+
+  windows-app:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Test and build self-contained Windows game
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LastMetro-Windows
+          path: target/dist/LastMetro/
