@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ArcadeRunTest {
     private GameWorld quiet() {
         return new GameWorld(1280, 576, new HazardFactory() {
-            @Override public Hazard createRandomHazard(double x, double y) { return new EScooter(1e9, y); }
+            @Override public Pattern choosePattern(int stage, boolean opening, Pattern previous) { return Pattern.EMPTY; }
         }, GameWorld.Mode.ENDLESS);
     }
     @Test void sevenCoinsBuildMultiplierAndRetryClearsAllCollectibles() {
@@ -33,13 +33,15 @@ class ArcadeRunTest {
         assertEquals(0, world.getCombo()); assertEquals(2, world.getHearts());
     }
     @Test void coinArcsStayReachableAndTheirPopulationRemainsBounded() {
-        var world = quiet();
+        var world = new GameWorld(1280, 576, new HazardFactory() {
+            @Override public Pattern choosePattern(int stage, boolean opening, Pattern previous) { return Pattern.RECOVERY; }
+        }, GameWorld.Mode.ENDLESS);
         int peak = 0;
         for (int i = 0; i < 6000; i++) {
             world.update(.01); peak = Math.max(peak, world.getCoins().size());
-            for (var coin : world.getCoins()) assertTrue(coin.getY() >= 576 - 161 && coin.getY() <= 576 - 53);
+            for (var coin : world.getCoins()) assertTrue(coin.getY() >= 576 - 165 && coin.getY() <= 576 - 53);
         }
-        assertTrue(peak > 7); assertTrue(peak < 30);
+        assertTrue(peak > 7); assertTrue(peak <= 44);
     }
     @Test void barrierAndCrateCanBothBeClearedByTheTunedJump() {
         for (boolean crate : new boolean[] {false, true}) {

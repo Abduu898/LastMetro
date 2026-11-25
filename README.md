@@ -9,7 +9,7 @@ coin trails, score multipliers, and a timed route built from the supplied pixel-
 
 ### Catch the Last Métro
 
-Cover 500 meters before the 45-second timer expires. The run begins with three hearts and ends with the arriving-train sequence when the goal is reached.
+Cover 500 meters before the 50-second timer expires. The run begins with three hearts and ends with automatic boarding and departure at Châtelet when the goal is reached.
 
 ### Endless Commute
 
@@ -18,13 +18,14 @@ Run as far as possible, chase a saved high score, and survive a street that beco
 Collect gold Métro coins along flat trails and jump arcs. Every seven coins raises
 the multiplier, up to 4×; keep collecting within 2.8 seconds to maintain the streak.
 Damage breaks it. Navigo cards grant 100 points and a five-second coin magnet.
-Avoid scooters, pigeons, roadwork barriers, wooden crates, and dog poop. Finishing
-the 500 m route enters the illuminated station and awards a 500-point train bonus.
+Follow jump arcs and low trails through shuffled obstacle sequences. Clean dodges
+award 15 points, pickups timed just after landing award 40, and a hit-free section
+awards 100. Catching the train awards 500 points. Finish with at least five seconds
+left and no hits for gold, at least three seconds left for silver, or finish for bronze.
 
 Collect the red heart pickups to restore one life, up to a maximum of three. At
-full health, a heart awards 50 points instead. Hearts are reachable on the running
-lane and appear periodically, with recovery opportunities brought forward after a
-hit. Healing uses the same pixel heart as the HUD, plus a chime and a score popup.
+full health, a heart awards 50 points. Hearts sit along optional jump arcs in
+recovery sequences, and a hit brings the next recovery opportunity forward. Healing uses the same pixel heart as the HUD, plus a chime and a score popup.
 A fatal collision ends the run immediately; pickups cannot revive a finished run.
 
 ## Movement
@@ -45,24 +46,22 @@ barriers, crates, cones, beveled panels, and Press Start 2P type stay in the pix
 style. The previous painted/anime experiment is archived under
 `raw_assets/illustrated-experiment/` locally and is excluded from Git and the build.
 
-The 45-second active-play budget is divided into three sections:
+The route has three sections marked by distance:
 
-| Active time | Section | Assets |
+| Distance | Section | Assets |
 | --- | --- | --- |
-| 0–20 s | Paris streets | Existing Part 1 far sky, buildings, and walkway |
-| 20–33 s | Metro approach | Cropped continuation sky, houses, and sidewalk |
-| 33–45 s | Underground platform | Cropped tunnels, platform wall, and foreground tracks |
+| 0–225 m | Paris streets | Existing Part 1 far sky, buildings, and walkway |
+| 225–375 m | Metro approach | Cropped continuation sky, houses, and sidewalk |
+| 375–500 m | Underground platform | Cropped tunnels, platform wall, and foreground tracks |
 
-A 2.4-second transfer screen separates each section. The departure countdown,
+Each entrance leads into a 2.4-second transfer on the first run and a 0.9-second transfer on subsequent attempts in the session. The departure countdown,
 world movement, hazards, and power-up clocks pause during transfers. The destination
 scene swaps beneath the opaque part of the fade. Inputs and hazards are cleared
 before the next section so the runner cannot take an unseen hit. The 500 m finish
-uses the supplied platform/train ending. Endless mode continues underground.
+uses an isolated sprite from the supplied green train artwork with animated doors. Endless mode continues underground.
 
 Far scenery moves at 8–10% of camera speed, buildings/walls at 35%, and the walkway
-at full speed. Repeatable body strips cover each section's duration; the metro
-entrance is placed from the section's remaining active time so it reaches the
-runner at the boundary. Nearest-neighbour sampling keeps the source pixels crisp.
+at full speed. Repeatable body strips cover each section's length. Both entrances scroll into place at their route markers. Nearest-neighbour sampling keeps the source pixels crisp.
 
 The supplied labelled sheets are saved under `raw_assets/route-sheets/`.
 Run `python scripts/prepare-pixel-route.py` to reproduce the label-free crops and

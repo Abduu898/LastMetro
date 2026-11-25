@@ -25,7 +25,13 @@ public final class GameAudio implements AutoCloseable {
                     if (source == null) continue;
                     try (var input = AudioSystem.getAudioInputStream(new java.io.BufferedInputStream(source))) {
                         clip = AudioSystem.getClip(); clip.open(input);
-                        gain(clip, name.equals("ambience") ? -19 : name.equals("step") ? -15 : -4);
+                        gain(clip, switch (name) {
+                            case "ambience" -> -20;
+                            case "step" -> -17;
+                            case "coin", "land" -> -11;
+                            case "train", "warning" -> -8;
+                            default -> -4;
+                        });
                         clips.put(name, clip); available = true;
                     }
                 } catch (Exception ignored) {
@@ -70,7 +76,7 @@ public final class GameAudio implements AutoCloseable {
             case SLIDE -> play("slide"); case TICKET, COIN -> play("coin"); case HIT -> play("hit");
             case HEART -> play("heal");
             case WARNING -> play("warning"); case HURRY -> voice("hurry");
-            case TRAIN_ARRIVE, TRAIN_DEPART -> play("train"); case DOORS -> play("doors");
+            case TRAIN_ARRIVE -> play("warning"); case TRAIN_DEPART -> play("train"); case DOORS -> play("doors");
             case WIN -> { play("win"); voice("arrived"); }
             case LOSE -> { play("lose"); voice("missed"); }
         }

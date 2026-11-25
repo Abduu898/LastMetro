@@ -8,20 +8,21 @@ import static org.junit.jupiter.api.Assertions.*;
 class GameWorldTest {
     @Test
     void catchTheMetroModeEndsWithAWinWhenTheCommuterKeepsAHeart() {
-        GameWorld world = new GameWorld(1280, 580, GameWorld.Mode.CATCH_THE_METRO);
+        GameWorld world = new GameWorld(1280, 580, new com.lastmetro.patterns.factory.HazardFactory() {
+            @Override public Pattern choosePattern(int stage, boolean opening, Pattern previous) { return Pattern.EMPTY; }
+        }, Mode.CATCH_THE_METRO);
 
-        world.update(43.0 + 2 * RouteTimeline.TRANSFER_SECONDS);
-        world.update(0.6);
-        world.update(0.01);
+        while (!world.isFinaleActive()) world.update(1.0 / 60);
         assertTrue(world.isFinaleActive());
         assertFalse(world.isGameOver());
 
-        world.update(1.0);
-        world.update(0.1);
-        world.update(0.5);
-        world.update(0.5);
-        world.update(1.0);
-
+        world.update(1.9);
+        assertTrue(world.getBoardingProgress() > 0);
+        assertEquals(0, world.getMetroDoorProgress());
+        world.update(.9);
+        assertEquals(1, world.getMetroDoorProgress());
+        assertEquals(GameWorld.TRAIN_STOP_X, world.getMetroTrainX());
+        world.update(2);
         assertTrue(world.isGameOver());
         assertTrue(world.isPlayerWon());
         assertTrue(world.getEndMessage().contains("attrapé"));
@@ -29,7 +30,9 @@ class GameWorldTest {
 
     @Test
     void catchTheMetroModeLosesIfTimeRunsOutBeforeTheGoal() {
-        GameWorld world = new GameWorld(1280, 580, GameWorld.Mode.CATCH_THE_METRO);
+        GameWorld world = new GameWorld(1280, 580, new com.lastmetro.patterns.factory.HazardFactory() {
+            @Override public Pattern choosePattern(int stage, boolean opening, Pattern previous) { return Pattern.EMPTY; }
+        }, Mode.CATCH_THE_METRO);
         world.getPlayer().applySlowDebuff(100);
 
         world.update(GameWorld.INITIAL_TIME + 2 * RouteTimeline.TRANSFER_SECONDS);
@@ -52,23 +55,6 @@ class GameWorldTest {
         assertTrue(world.getDistanceMeters() > firstDistance * 2.0);
         assertEquals(GameWorld.INITIAL_TIME, world.getTimeRemaining());
         assertFalse(world.isGameOver());
-    }
-
-    @Test
-    void hazardCadenceTightensGraduallyAndStopsAtAFairMinimumInBothModes() {
-        assertEquals(GameWorld.INITIAL_HAZARD_INTERVAL_SECONDS,
-                GameWorld.hazardSpawnInterval(Mode.CATCH_THE_METRO, GameWorld.INITIAL_TIME, 0));
-        assertEquals(GameWorld.MIN_HAZARD_INTERVAL_SECONDS,
-                GameWorld.hazardSpawnInterval(Mode.CATCH_THE_METRO, 0, 0));
-
-        double earlyEndless = GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 0);
-        double midEndless = GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 500);
-        double cappedEndless = GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 1000);
-        assertTrue(earlyEndless > midEndless);
-        assertTrue(midEndless > cappedEndless);
-        assertEquals(GameWorld.MIN_HAZARD_INTERVAL_SECONDS, cappedEndless);
-        assertEquals(cappedEndless,
-                GameWorld.hazardSpawnInterval(Mode.ENDLESS, GameWorld.INITIAL_TIME, 5000));
     }
 
     @Test
@@ -114,8 +100,8 @@ class GameWorldTest {
     }
 
     private static void addGroundCollision(GameWorld world, double deltaTime) {
-        double hazardX = world.getPlayer().getX() + GameWorld.BASE_SCROLL_SPEED * deltaTime;
-        world.getHazards().add(new DogPoop(hazardX, 580));
         world.update(deltaTime);
+        world.getHazards().add(new DogPoop(world.getPlayer().getX() + 15, 580));
+        world.update(.001);
     }
 }

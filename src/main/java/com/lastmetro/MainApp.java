@@ -290,8 +290,18 @@ public class MainApp extends Application implements GameObserver {
         }
     }
 
+    private boolean catchAttempted;
+    private boolean endlessAttempted;
+
     private void startGame(GameWorld.Mode mode) {
         world = new GameWorld(WIDTH, GROUND_Y, mode);
+        if (mode == GameWorld.Mode.CATCH_THE_METRO) {
+            if (catchAttempted) world.useQuickTransfers();
+            catchAttempted = true;
+        } else {
+            if (endlessAttempted) world.useQuickTransfers();
+            endlessAttempted = true;
+        }
         world.addObserver(this);
         simulationClock.reset();
         renderer.resetAnimations();
@@ -331,7 +341,8 @@ public class MainApp extends Application implements GameObserver {
     @Override
     public void onSarcasticEvent(String message) {
         bannerText = message;
-        bannerTimer = 3.0;
+        bannerTimer = message.contains("HEARTS:") || message.startsWith("CLEAN SECTION") ? 2.0 : 1.2;
+        if (message.contains("HEARTS:")) bannerText = "HIT  ·  " + world.getHearts() + " / " + GameWorld.MAX_HEARTS + " HEARTS";
     }
 
     @Override

@@ -6,13 +6,13 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 
-/** Authored route sheets: independent layers and finite, time-matched ending placement. */
+/** Authored route sheets: independent layers and distance-based entrances and an animated train. */
 public final class PixelRouteScenery {
-    private Image far, buildings, walk, tunnel, wall, front, transfer, ending, crown;
+    private Image far, buildings, walk, tunnel, wall, front, transfer, train, entrance, crown;
     public void load() {
         far = load("street-far.png"); buildings = load("street-buildings.png"); walk = load("street-walkway.png");
         tunnel = load("underground-far.png"); wall = load("underground-wall.png"); front = load("underground-front.png");
-        transfer = load("transfer.png"); ending = load("platform-ending.png");
+        transfer = load("transfer.png"); train = load("metro-car.png"); entrance = load("metro-entrance.png");
         crown = load("leaf-crown.png");
     }
     private Image load(String name) {
@@ -21,7 +21,7 @@ public final class PixelRouteScenery {
         var image = new Image(url.toExternalForm()); return image.isError() ? null : image;
     }
     public boolean isReady() { return far != null && buildings != null && walk != null && tunnel != null && wall != null && front != null; }
-    public boolean hasEnding() { return ending != null; }
+    public boolean hasEnding() { return train != null; }
 
     public void continuation(GraphicsContext gc, GameWorld world, double menuTime) {
         boolean destination = world != null && world.isTransferring() && world.getTransferProgress() >= .5;
@@ -36,11 +36,6 @@ public final class PixelRouteScenery {
             loop(gc, buildings, 2100, 0, buildings.getHeight(), 116, 428, camera * .35);
             treeCrowns(gc, camera);
             loop(gc, walk, 2100, 0, walk.getHeight(), 385, 335, camera);
-            // This entrance is one world object, placed to reach the runner at the section boundary.
-            double scale = 335 / walk.getHeight();
-            double entranceX = (1 - progress) * 13 * GameWorld.BASE_SCROLL_SPEED + 150 - 170 * scale;
-            gc.drawImage(walk, 2180, 0, walk.getWidth() - 2180, walk.getHeight(), snap(entranceX), 385,
-                    (walk.getWidth() - 2180) * scale, 335);
         } else {
             double camera = world == null ? progress * 12 * GameWorld.BASE_SCROLL_SPEED : destination ? 0 : world.getStageDistance() * 40;
             gc.setFill(Color.web("#1b2023")); gc.fillRect(0, 0, 1280, 720);
@@ -53,14 +48,68 @@ public final class PixelRouteScenery {
                 gc.drawImage(front, 0, 220, 1850, front.getHeight() - 220, x, 576, width, 144);
             }
         }
-        if (world != null && ending != null && (world.isFinaleActive() || world.getRouteProgress() > .97)) {
-            double alpha = world.isFinaleActive() ? 1 : Math.min(1, (world.getRouteProgress() - .97) / .03);
-            gc.setGlobalAlpha(alpha);
-            // Preserve the wide strip's aspect ratio: stretching it to 16:9 makes NPCs and trains too tall.
-            double scale=.76, top=576-448*scale;
-            gc.setFill(Color.web("#192023"));gc.fillRect(0,0,1280,720);
-            loop(gc,tunnel,tunnel.getWidth(),0,180,0,Math.ceil(top),0);
-            gc.drawImage(ending,-300,snap(top),ending.getWidth()*scale,ending.getHeight()*scale);
+        gc.restore();
+    }
+
+    public void drawEntrance(GraphicsContext gc, GameWorld world) {
+        int stage = world.getRouteStage();
+        if (stage >= 2 || world.getTransferProgress() >= .5) return;
+        double remaining = RouteTimeline.end(stage) - world.getDistanceMeters();
+        if (remaining > 31) return;
+        double center = snap(175 + remaining * 40);
+        gc.save();
+        gc.setImageSmoothing(false);
+        if (stage == 0 && entrance != null) {
+            gc.drawImage(entrance, center - 184, 354, 310, 273);
+            for (double post : new double[] {center - 107, center + 101}) {
+                gc.setFill(Color.web("#23362d")); gc.fillRect(post - 6, 345, 12, 14);
+                gc.fillRect(post - 9, 341, 18, 6);
+                gc.setFill(Color.web("#d9954f")); gc.fillRect(post - 5, 347, 10, 7);
+                gc.setFill(Color.web("#ffdb86")); gc.fillRect(post - 3, 348, 5, 4);
+            }
+        } else if (stage == 1 && wall != null) {
+            gc.setFill(Color.web("#202a2e"));
+            gc.fillRect(center - 102, 372, 204, 204);
+            gc.drawImage(wall, 2279, 0, 344, 348, center - 102, 370, 204, 206);
+            ArcadeHud.panel(gc, center - 82, 341, 164, 32, false);
+            ArcadeHud.label(gc, "TO THE PLATFORM", center, 362, 14, Color.web("#ffdf91"), true);
+        }
+        gc.restore();
+    }
+
+    public void drawTrain(GraphicsContext gc, GameWorld world, boolean reducedMotion) {
+        if (train == null || world.getMode() != GameWorld.Mode.CATCH_THE_METRO || world.getRouteStage() != 2) return;
+        double remaining = GameWorld.NORMAL_GOAL_METERS - world.getDistanceMeters();
+        if (!world.isFinaleActive() && remaining > 24) return;
+        double x = world.isFinaleActive() ? world.getMetroTrainX()
+                : GameWorld.TRAIN_STOP_X + 640 * Math.pow(remaining / 24, 1.5);
+        if (reducedMotion && !world.isFinaleActive()) x = GameWorld.TRAIN_STOP_X;
+        double scale = .93, y = 358;
+        gc.save();
+        gc.setImageSmoothing(false);
+        gc.translate(snap(x), y);
+        gc.scale(scale, scale);
+        gc.drawImage(train, 0, 0);
+        // The supplied closed door leaves slide into the jambs over a lit interior.
+        double leaf = 53, left = 154, top = 58, height = 176;
+        double visibleLeaf = leaf * world.getMetroDoorProgress();
+        gc.setFill(Color.web("#162b29")); gc.fillRect(left, top, 2 * leaf, height);
+        gc.setFill(Color.web("#334d43")); gc.fillRect(left + 10, top + 12, 2 * leaf - 20, 130);
+        gc.setFill(Color.web("#73958a")); gc.fillRect(left + 22, top + 27, 2 * leaf - 44, 42);
+        gc.setFill(Color.web("#aab6a0")); gc.fillRect(left + 24, top + 31, 2 * leaf - 48, 5);
+        gc.setFill(Color.web("#263833")); gc.fillRect(left + 16, top + 89, 2 * leaf - 32, 26);
+        gc.setFill(Color.web("#516e60")); gc.fillRect(left + 14, top + 112, 2 * leaf - 28, 10);
+        gc.setFill(Color.web("#b79a5e"));
+        gc.fillRect(left + 9, top + 12, 3, 134);
+        gc.fillRect(left + 2 * leaf - 12, top + 12, 3, 134);
+        gc.setFill(Color.web("#edca83")); gc.fillRect(left + 2, top + 3, 2 * leaf - 4, 7);
+        gc.setFill(Color.web("#625640")); gc.fillRect(left + 2, top + 140, 2 * leaf - 4, 34);
+        gc.setFill(Color.web("#94a99a")); gc.fillRect(left, top + height - 5, 2 * leaf, 5);
+        if (visibleLeaf > 1) {
+            gc.drawImage(train, left + leaf - visibleLeaf, top, visibleLeaf, height,
+                    left, top, visibleLeaf, height);
+            gc.drawImage(train, left + leaf, top, visibleLeaf, height,
+                    left + 2 * leaf - visibleLeaf, top, visibleLeaf, height);
         }
         gc.restore();
     }

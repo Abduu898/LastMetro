@@ -9,7 +9,7 @@ import static com.lastmetro.feedback.RunFeedback.Event.*;
 class RunFeedbackTest {
     private GameWorld quiet(GameWorld.Mode mode) {
         return new GameWorld(1280, 554, new HazardFactory() {
-            @Override public Hazard createRandomHazard(double x, double y) { return new EScooter(1e9, y); }
+            @Override public Pattern choosePattern(int stage, boolean opening, Pattern previous) { return Pattern.EMPTY; }
         }, mode);
     }
 
@@ -35,7 +35,7 @@ class RunFeedbackTest {
     @Test void warningAndTrainEventsDoNotRepeatAndResetAllowsAnotherRun() {
         var world = quiet(GameWorld.Mode.CATCH_THE_METRO);
         var feedback = new RunFeedback();
-        for (int i = 0; i < 3981; i++) world.update(.01);
+        while (world.getTimeRemaining() > 10) world.update(.01);
         assertTrue(feedback.update(world, .01).contains(HURRY));
         assertFalse(feedback.update(world, .01).contains(HURRY));
         int arrived = 0, doors = 0, departed = 0, won = 0;

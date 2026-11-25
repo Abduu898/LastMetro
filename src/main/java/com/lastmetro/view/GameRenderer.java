@@ -399,7 +399,7 @@ public final class GameRenderer {
         ArcadeHud.panel(gc, 985, 340, 230, 150, false);
         ArcadeHud.label(gc, "THE NIGHT RUN", 1100, 374, 15, Color.web("#ffce76"), true);
         ArcadeHud.label(gc, "500 METRES", 1100, 413, 23, Color.web("#fff4dc"), true);
-        ArcadeHud.label(gc, "45 SECONDS · 3 HEARTS", 1100, 449, 12, Color.web("#e2d7bd"), true);
+        ArcadeHud.label(gc, "50 SECONDS · 3 HEARTS", 1100, 449, 12, Color.web("#e2d7bd"), true);
         ArcadeHud.label(gc, "COLLECT · DODGE · CATCH", 1100, 475, 11, Color.web("#e2d7bd"), true);
     }
 
@@ -459,7 +459,7 @@ public final class GameRenderer {
         String[] lines={jumpKey.toUpperCase()+"  HOLD: HIGH JUMP / TAP: SHORT HOP",
                 slideKey.toUpperCase()+"  SLIDE / FAST-FALL IN THE AIR","P / ESC  PAUSE OR RESUME",
                 "COINS  BUILD A STREAK FOR UP TO 4x POINTS","NAVIGO  FIVE-SECOND COIN MAGNET",
-                "HEARTS  RESTORE A LIFE, UP TO THREE","CATCH  500 m IN 45 SECONDS / ENDLESS: SURVIVE"};
+                "HEARTS  RESTORE A LIFE, UP TO THREE","CATCH  500 m IN 50 SECONDS / ENDLESS: SURVIVE"};
         for(int i=0;i<lines.length;i++)ArcadeHud.label(gc,lines[i],300,270+i*39,18,
                 i>=3?Color.web("#efcd8b"):Color.web("#f4ebd5"),false);
         drawButton(gc,470,580,340,"BACK TO MENU");
@@ -470,11 +470,26 @@ public final class GameRenderer {
         if (world == null) return;
         gc.save();
         if (cameraMotion) gc.translate(effects.cameraX(), effects.cameraY());
+        gc.setFill(new LinearGradient(0, 405, 0, 630, false, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.TRANSPARENT), new Stop(.66, Color.rgb(15, 22, 36, .26)),
+                new Stop(1, Color.TRANSPARENT)));
+        gc.fillRect(0, 405, WIDTH, 225);
+        pixelRoute.drawEntrance(gc, world);
+        pixelRoute.drawTrain(gc, world, effects.isReducedMotion());
         arcade.coins(gc, world, effects.time(), effects.isReducedMotion());
         arcade.hearts(gc, world, effects.time(), effects.isReducedMotion());
         for (Hazard hazard : world.getHazards()) {
             gc.setFill(Color.rgb(15, 17, 25, .24));
             gc.fillOval(hazard.getX() - 4, GROUND_Y - 3, hazard.getWidth() + 8, 7);
+            if (hazard.getType().equals("OVERHEAD_SIGN")) {
+                double x = Math.rint(hazard.getX()), y = hazard.getY();
+                gc.setFill(Color.web("#222733")); gc.fillRect(x, y - 26, 7, 31);
+                ArcadeHud.panel(gc, x, y, hazard.getWidth(), hazard.getHeight(), true);
+                ArcadeHud.label(gc, "SLIDE", x + 37, y + 19, 15, Color.web("#181f27"), true);
+                gc.setFill(Color.web("#262935"));
+                gc.fillPolygon(new double[]{x + 31, x + 43, x + 37}, new double[]{y + 26, y + 26, y + 34}, 3);
+                continue;
+            }
             if (arcade.hasProps() && (hazard.getType().equals("BARRIER") || hazard.getType().equals("CRATE"))) {
                 gc.setImageSmoothing(false);
                 arcade.prop(gc, hazard.getType().equals("BARRIER") ? 1 : 2,
@@ -529,6 +544,12 @@ public final class GameRenderer {
             double radius = effects.isReducedMotion() ? 46 : 46 + Math.sin(effects.time() * 4) * 4;
             gc.strokeOval(player.getX() + 25 - radius, player.getY() + 30 - radius, radius * 2, radius * 2);
         }
+        double board = world.getBoardingProgress();
+        double entering = world.isTransferring() && world.getTransferProgress() < .5
+                ? Math.min(1, world.getTransferProgress() / .20) : 0;
+        gc.save();
+        gc.setGlobalAlpha(1 - Math.max(board, entering));
+        gc.translate(0, 22 * entering - 7 * board);
         double altitude = Math.max(0, GROUND_Y - player.getY() - player.getHeight());
         gc.setFill(Color.rgb(12, 18, 25, .26 * Math.max(.2, 1 - altitude / 220)));
         gc.fillOval(player.getX() - 9, GROUND_Y - 4, player.getWidth() + 18, 9);
@@ -543,8 +564,8 @@ public final class GameRenderer {
             case "SLIDING" -> SLIDING_BOB[playerAnimation.getCurrentFrame()];
             default -> 0;
         };
-        if (world.isInvulnerable()) gc.setGlobalAlpha(effects.isReducedMotion() ? .65
-                : .55 + .45 * Math.abs(Math.sin(effects.time() * 18)));
+        if (world.isInvulnerable()) gc.setGlobalAlpha(gc.getGlobalAlpha() * (effects.isReducedMotion() ? .65
+                : .55 + .45 * Math.abs(Math.sin(effects.time() * 18))));
         SpriteStrip playerSprite = playerSprites.get(playerAnimation.getCurrentName());
         if (playerSprite == null) {
             gc.fillRect(player.getX(), player.getY() + offset, player.getWidth(), player.getHeight());
@@ -564,7 +585,7 @@ public final class GameRenderer {
                 gc.fillOval(player.getX() - 8, GROUND_Y - 7, player.getWidth() + 16, 12);
             }
         }
-        gc.setGlobalAlpha(1.0);
+        gc.restore();
         gc.restore();
         if (!world.isPlayerWon()) effects.drawParticles(gc);
         gc.restore();
@@ -573,9 +594,10 @@ public final class GameRenderer {
         arcadeHud.draw(gc, world, effects.time(), soundEnabled, effects.isReducedMotion(),
                 bannerText, bannerTimer, jumpLabel, slideLabel);
         if (world.isFinaleActive() && !world.isGameOver()) {
-            ArcadeHud.label(gc, "BONUS STATION", 640, 190, 15, Color.web("#fff0c8"), true);
-            ArcadeHud.label(gc, "LAST TRAIN CAUGHT!", 640, 240, 38, Color.web("#ffd171"), true);
-            ArcadeHud.label(gc, "+500", 640, 282, 27, Color.web("#fff0c8"), true);
+            ArcadeHud.panel(gc, 456, 155, 368, 65, false);
+            ArcadeHud.label(gc, "CHÂTELET", 640, 181, 22, Color.web("#ffd171"), true);
+            ArcadeHud.label(gc, board < 1 ? "BOARDING THE LAST MÉTRO" : "ALL ABOARD",
+                    640, 204, 14, Color.web("#fff0c8"), true);
         }
     }
 
@@ -641,8 +663,11 @@ public final class GameRenderer {
         ArcadeHud.label(gc, "POINTS", 640, 378, 12, Color.web("#eadfca"), true);
         ArcadeHud.label(gc, String.format("%d COINS  ·  %.0f m  ·  BEST STREAK %d", world.getCoinsCollected(), world.getDistanceMeters(), world.getBestCombo()),
                 640, 414, 18, Color.web("#fff0ce"), true);
-        ArcadeHud.label(gc, world.isPlayerWon() ? "+500 LAST TRAIN BONUS" : world.getMode() == GameWorld.Mode.ENDLESS
+        ArcadeHud.label(gc, world.isPlayerWon() ? String.format("%s  ·  %.1fs LEFT  ·  %d CLEAN SECTIONS",
+                world.getMedal(), world.getTimeRemaining(), world.getCleanSections()) : world.getMode() == GameWorld.Mode.ENDLESS
                 ? "PERSONAL BEST  " + endlessHighScore : "R TO RETRY  ·  M FOR MENU", 640, 452, 14, Color.web("#ffcf77"), true);
+        ArcadeHud.label(gc, String.format("%d CLEAN DODGES  ·  %d PERFECT LANDINGS",
+                world.getCleanDodges(), world.getPerfectLandings()), 640, 567, 12, Color.web("#eadfca"), true);
         drawButton(gc, 300, 485, 320, "TRY AGAIN");
         drawButton(gc, 660, 485, 320, "MAIN MENU");
     }

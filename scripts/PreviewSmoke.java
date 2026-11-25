@@ -41,7 +41,7 @@ public class PreviewSmoke extends Application {
     }
     private GameWorld quietWorld(GameWorld.Mode mode) throws Exception {
         var world = new GameWorld(1280, MainApp.GROUND_Y, new HazardFactory() {
-            @Override public Hazard createRandomHazard(double x, double y) { return new EScooter(1e9, y); }
+            @Override public Pattern choosePattern(int stage, boolean opening, Pattern previous) { return Pattern.EMPTY; }
         }, mode);
         world.addObserver(app);
         var f = MainApp.class.getDeclaredField("world"); f.setAccessible(true); f.set(app, world);
@@ -114,6 +114,11 @@ public class PreviewSmoke extends Application {
             if (world.isTransferring() && world.getTransferProgress() > .45 && world.getTransferProgress() < .46) capture("transfer-" + world.getRouteStage());
             if (world.getRouteStage() == 1 && world.getStageProgress() > .48 && world.getStageProgress() < .482) capture("continuation");
             if (world.getRouteStage() == 2 && world.getStageProgress() > .45 && world.getStageProgress() < .452) capture("underground");
+            if (!world.isTransferring() && world.getRouteStage() < 2
+                    && world.getStageProgress() > .966 && world.getStageProgress() < .969)
+                capture("entrance-" + world.getRouteStage());
+            if (world.isFinaleActive() && world.getFinaleTime() > 2.40 && world.getFinaleTime() < 2.42) capture("train-doors");
+            if (world.isFinaleActive() && world.getFinaleTime() > 3.69 && world.getFinaleTime() < 3.71) capture("departure");
             if (world.isFinaleActive() && world.getFinaleTime() > .8 && world.getFinaleTime() < .82) capture("train");
             if (world.isGameOver()) break;
         }
