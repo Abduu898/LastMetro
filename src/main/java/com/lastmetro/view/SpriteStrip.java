@@ -14,11 +14,13 @@ public final class SpriteStrip {
     private final Image image;
     private final int frameCount;
     private final List<Rectangle2D> frames;
+    private final double referenceHeight;
 
     private SpriteStrip(Image image, List<Rectangle2D> frames) {
         this.image = image;
         this.frameCount = frames.size();
         this.frames = List.copyOf(frames);
+        this.referenceHeight = frames.stream().mapToDouble(Rectangle2D::getHeight).max().orElse(1);
     }
 
     /** Loads equally-sized frames arranged in one horizontal strip. */
@@ -49,6 +51,15 @@ public final class SpriteStrip {
             }
             return Optional.of(new SpriteStrip(image, Arrays.asList(frames)));
         });
+    }
+
+    /** Fixed atlas scale across a cycle, with every frame's feet anchored to the same ground. */
+    public void drawGrounded(GraphicsContext gc, int frame, double centerX, double bottom, double height) {
+        var source = frames.get(Math.max(0, Math.min(frameCount - 1, frame)));
+        double scale = height / referenceHeight;
+        double w = source.getWidth() * scale, h = source.getHeight() * scale;
+        gc.drawImage(image, source.getMinX(), source.getMinY(), source.getWidth(), source.getHeight(),
+                centerX - w / 2, bottom - h, w, h);
     }
 
     private static Optional<Image> loadImage(Class<?> resourceOwner, String resourcePath) {

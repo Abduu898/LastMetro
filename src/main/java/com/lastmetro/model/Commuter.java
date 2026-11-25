@@ -10,10 +10,11 @@ import com.lastmetro.patterns.state.RunningState;
 public class Commuter extends Entity {
     public static final double STANDING_HEIGHT = 80.0;
     public static final double SLIDING_HEIGHT = 40.0;
-    public static final double JUMP_FORCE = -780.0;
-    public static final double GRAVITY = 2200.0;
-    public static final double FAST_FALL_SPEED = 1100.0;
-    public static final double JUMP_BUFFER_SECONDS = 0.12;
+    public static final double JUMP_FORCE = -735.0;
+    public static final double GRAVITY = 1900.0;
+    public static final double FALL_GRAVITY_MULTIPLIER = 1.35;
+    public static final double FAST_FALL_SPEED = 1050.0;
+    public static final double JUMP_BUFFER_SECONDS = 0.16;
     private static final double RELEASED_BUFFERED_JUMP_RATIO = 0.55;
 
     private final double groundY;

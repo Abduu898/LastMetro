@@ -1,0 +1,90 @@
+[
+  {
+    "source": "street-sheet.png",
+    "output": "street-far.png",
+    "crop": [
+      92,
+      75,
+      2660,
+      407
+    ],
+    "connected_checker_removed": false
+  },
+  {
+    "source": "street-sheet.png",
+    "output": "street-buildings.png",
+    "crop": [
+      92,
+      500,
+      2660,
+      1048
+    ],
+    "connected_checker_removed": true
+  },
+  {
+    "source": "street-sheet.png",
+    "output": "street-walkway.png",
+    "crop": [
+      92,
+      1142,
+      2660,
+      1483
+    ],
+    "connected_checker_removed": true
+  },
+  {
+    "source": "transfer-sheet.png",
+    "output": "transfer.png",
+    "crop": [
+      74,
+      163,
+      2678,
+      770
+    ],
+    "connected_checker_removed": false
+  },
+  {
+    "source": "transfer-sheet.png",
+    "output": "platform-ending.png",
+    "crop": [
+      77,
+      869,
+      2676,
+      1489
+    ],
+    "connected_checker_removed": false
+  },
+  {
+    "source": "underground-sheet.png",
+    "output": "underground-far.png",
+    "crop": [
+      51,
+      219,
+      2700,
+      568
+    ],
+    "connected_checker_removed": false
+  },
+  {
+    "source": "underground-sheet.png",
+    "output": "underground-wall.png",
+    "crop": [
+      51,
+      652,
+      2700,
+      1000
+    ],
+    "connected_checker_removed": true
+  },
+  {
+    "source": "underground-sheet.png",
+    "output": "underground-front.png",
+    "crop": [
+      51,
+      1095,
+      2700,
+      1497
+    ],
+    "connected_checker_removed": true
+  }
+]

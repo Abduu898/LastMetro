@@ -86,6 +86,7 @@ try {
         --vendor 'Last Metro' `
         --main-jar $appJarName `
         --main-class com.lastmetro.MainApp `
+        --java-options '--enable-native-access=javafx.graphics' `
         --java-options '--module-path $APPDIR --add-modules javafx.controls,javafx.graphics'
     if ($LASTEXITCODE -ne 0) {
         throw "jpackage failed with exit code $LASTEXITCODE."

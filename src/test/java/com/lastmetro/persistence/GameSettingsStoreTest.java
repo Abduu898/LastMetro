@@ -31,6 +31,19 @@ class GameSettingsStoreTest {
         assertEquals(customized, new GameSettingsStore(settingsFile).load());
     }
 
+    @Test void audioAndMotionPreferencesSurviveRebindingAndOldFiles() throws IOException {
+        Path file = temporaryDirectory.resolve("settings.properties");
+        var store = new GameSettingsStore(file);
+        var preferences = GameSettings.defaults().withSoundEnabled(false).withReducedMotion(true).withJumpKey(KeyCode.W);
+        assertTrue(store.save(preferences));
+        assertEquals(preferences, store.load());
+        Files.writeString(file, "jump=W\nslide=DOWN\n");
+        assertTrue(store.load().soundEnabled());
+        assertFalse(store.load().reducedMotion());
+        assertThrows(IllegalArgumentException.class, () -> new GameSettings(KeyCode.F8, KeyCode.DOWN));
+        assertThrows(IllegalArgumentException.class, () -> new GameSettings(KeyCode.SPACE, KeyCode.F9));
+    }
+
     @Test
     void malformedOrUnsafeSettingsFallBackToDefaults() throws IOException {
         Path settingsFile = temporaryDirectory.resolve("settings.properties");

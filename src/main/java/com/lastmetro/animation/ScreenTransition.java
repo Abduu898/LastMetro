@@ -56,5 +56,7 @@ public final class ScreenTransition {
     }
 
     public boolean isRunning() { return phase != 0; }
+    /** Discard a pending action when focus loss must immediately pause gameplay. */
+    public void cancel() { phase = 0; elapsed = alpha = 0; midpointAction = null; }
     public double getAlpha() { return alpha; }
 }

@@ -39,7 +39,7 @@ class CommuterTest {
         assertEquals("JUMPING", player.getCurrentState().getStateName());
         assertEquals(Commuter.JUMP_FORCE, player.getVelocityY());
         player.onJumpReleased();
-        assertEquals(Commuter.JUMP_FORCE / 2.0, player.getVelocityY());
+        assertEquals(-300.0, player.getVelocityY());
 
         player.update(0.1);
         assertTrue(player.getY() < initialY);
@@ -54,13 +54,14 @@ class CommuterTest {
     @Test
     void jumpTappedJustBeforeLandingIsBufferedAndStartsAShortHop() {
         player.onJumpPressed();
-        for (int frame = 0; frame < 35; frame++) player.update(1.0 / 60.0);
+        while (player.getVelocityY() <= 0 || player.getY() + player.getHeight() < GROUND_Y - 18)
+            player.update(1.0 / 60.0);
         assertEquals("JUMPING", player.getCurrentState().getStateName());
 
         player.onJumpReleased();
         player.onJumpPressed();
         player.onJumpReleased();
-        for (int frame = 0; frame < 6; frame++) player.update(1.0 / 60.0);
+        for (int frame = 0; frame < 8; frame++) player.update(1.0 / 60.0);
 
         assertEquals("JUMPING", player.getCurrentState().getStateName());
         assertTrue(player.getVelocityY() < 0.0);
@@ -73,7 +74,7 @@ class CommuterTest {
         for (int frame = 0; frame < 35; frame++) player.update(1.0 / 60.0);
 
         player.onJumpPressed(); // Operating systems may repeat key-down events while held.
-        for (int frame = 0; frame < 8; frame++) player.update(1.0 / 60.0);
+        for (int frame = 0; frame < 15; frame++) player.update(1.0 / 60.0);
 
         assertEquals("RUNNING", player.getCurrentState().getStateName());
     }
@@ -90,7 +91,7 @@ class CommuterTest {
         player.onJumpReleased();
         player.onJumpPressed();
         player.releaseInputs();
-        for (int frame = 0; frame < 8; frame++) player.update(1.0 / 60.0);
+        for (int frame = 0; frame < 15; frame++) player.update(1.0 / 60.0);
 
         assertEquals("RUNNING", player.getCurrentState().getStateName());
         assertFalse(player.isSlideHeld());
@@ -160,7 +161,7 @@ class CommuterTest {
         player.onSlideChanged(false);
 
         assertFalse(player.isConfused());
-        assertEquals(velocityBeforeRelease / 2.0, player.getVelocityY());
+        assertEquals(Math.max(velocityBeforeRelease, -300.0), player.getVelocityY());
     }
 
     @Test

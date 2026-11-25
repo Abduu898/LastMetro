@@ -7,6 +7,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ScreenTransitionTest {
+    @Test void cancellingFocusTransitionDiscardsItsPendingAction() {
+        var transition = new ScreenTransition(.2);
+        var changes = new AtomicInteger();
+        transition.start(changes::incrementAndGet); transition.update(.1);
+        transition.cancel(); transition.update(1);
+        assertFalse(transition.isRunning()); assertEquals(0, transition.getAlpha()); assertEquals(0, changes.get());
+    }
     @Test
     void fadesOutRunsScreenChangeThenFadesBackIn() {
         ScreenTransition transition = new ScreenTransition(0.2);

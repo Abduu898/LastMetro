@@ -26,7 +26,9 @@ public final class GameSettingsStore {
             properties.load(input);
             KeyCode jump = KeyCode.valueOf(properties.getProperty("jump", "SPACE"));
             KeyCode slide = KeyCode.valueOf(properties.getProperty("slide", "DOWN"));
-            return new GameSettings(jump, slide);
+            return new GameSettings(jump, slide,
+                    Boolean.parseBoolean(properties.getProperty("sound", "true")),
+                    Boolean.parseBoolean(properties.getProperty("reducedMotion", "false")));
         } catch (IOException | IllegalArgumentException exception) {
             return GameSettings.defaults();
         }
@@ -41,6 +43,8 @@ public final class GameSettingsStore {
             Properties properties = new Properties();
             properties.setProperty("jump", settings.jumpKey().name());
             properties.setProperty("slide", settings.slideKey().name());
+            properties.setProperty("sound", Boolean.toString(settings.soundEnabled()));
+            properties.setProperty("reducedMotion", Boolean.toString(settings.reducedMotion()));
             try (OutputStream output = Files.newOutputStream(temporary)) {
                 properties.store(output, "Last Metro player settings");
             }
