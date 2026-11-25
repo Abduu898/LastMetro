@@ -44,10 +44,16 @@ public final class GameRenderer {
     private boolean cameraMotion;
     private final ArcadeArt arcade = new ArcadeArt();
     private final ArcadeHud arcadeHud = new ArcadeHud(arcade);
+    private final VictoryTicket victoryTicket = new VictoryTicket(arcade);
+    private Rectangle2D pressedResultButton;
     private final PixelRouteScenery pixelRoute = new PixelRouteScenery();
     private double pointerX = -1, pointerY = -1;
     private String jumpLabel = "SPACE", slideLabel = "DOWN";
     public void setPointer(double x, double y) { pointerX = x; pointerY = y; }
+
+    public void setPressedResultButton(Rectangle2D button) { pressedResultButton = button; }
+
+    public String updateVictory(double dt) { return victoryTicket.advance(dt, effects.isReducedMotion()); }
 
     public void setPresentationSettings(boolean sound, boolean reducedMotion) {
         soundEnabled = sound;
@@ -171,6 +177,8 @@ public final class GameRenderer {
 
     public void resetAnimations() {
         feedback.reset(); effects.reset();
+        victoryTicket.reset();
+        pressedResultButton = null;
         playerAnimation.play("RUNNING");
         playerAnimation.restart();
     }
@@ -194,8 +202,12 @@ public final class GameRenderer {
                 if (screen == GameScreen.PAUSED) {
                     drawPause(gc, world);
                 } else if (screen == GameScreen.RESULTS) {
-                    drawResults(gc, world, gameOverReason, endlessHighScore);
-                    if (world.isPlayerWon()) effects.drawParticles(gc);
+                    if (world.isPlayerWon()) {
+                        victoryTicket.draw(gc, world, pixelFontFamily, effects.isReducedMotion(),
+                                pointerX, pointerY, pressedResultButton);
+                    } else {
+                        drawDefeat(gc, world, endlessHighScore);
+                    }
                 }
             }
         }
@@ -654,17 +666,16 @@ public final class GameRenderer {
         drawButton(gc, 660, 410, 320, "MAIN MENU");
     }
 
-    private void drawResults(GraphicsContext gc, GameWorld world, String reason, int endlessHighScore) {
+    private void drawDefeat(GraphicsContext gc, GameWorld world, int endlessHighScore) {
         drawOverlayPanel(gc);
-        arcadeTitle(gc, world.isPlayerWon() ? "LEVEL COMPLETE!" : "MISSED THE LAST TRAIN", 640, 250, world.isPlayerWon() ? 48 : 37);
-        ArcadeHud.label(gc, world.isPlayerWon() ? "WELCOME ABOARD. PARIS CAN WAIT." : "CATCH YOUR BREATH. GO AGAIN.",
+        arcadeTitle(gc, "MISSED THE LAST TRAIN", 640, 250, 37);
+        ArcadeHud.label(gc, "CATCH YOUR BREATH. GO AGAIN.",
                 640, 292, 14, Color.web("#eadfca"), true);
         ArcadeHud.label(gc, String.format("%,d", world.getScore()), 640, 355, 47, Color.web("#ffd477"), true);
         ArcadeHud.label(gc, "POINTS", 640, 378, 12, Color.web("#eadfca"), true);
         ArcadeHud.label(gc, String.format("%d COINS  ·  %.0f m  ·  BEST STREAK %d", world.getCoinsCollected(), world.getDistanceMeters(), world.getBestCombo()),
                 640, 414, 18, Color.web("#fff0ce"), true);
-        ArcadeHud.label(gc, world.isPlayerWon() ? String.format("%s  ·  %.1fs LEFT  ·  %d CLEAN SECTIONS",
-                world.getMedal(), world.getTimeRemaining(), world.getCleanSections()) : world.getMode() == GameWorld.Mode.ENDLESS
+        ArcadeHud.label(gc, world.getMode() == GameWorld.Mode.ENDLESS
                 ? "PERSONAL BEST  " + endlessHighScore : "R TO RETRY  ·  M FOR MENU", 640, 452, 14, Color.web("#ffcf77"), true);
         ArcadeHud.label(gc, String.format("%d CLEAN DODGES  ·  %d PERFECT LANDINGS",
                 world.getCleanDodges(), world.getPerfectLandings()), 640, 567, 12, Color.web("#eadfca"), true);

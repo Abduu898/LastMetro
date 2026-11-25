@@ -81,6 +81,11 @@ public final class GameAudio implements AutoCloseable {
             case LOSE -> { play("lose"); voice("missed"); }
         }
     }
+    public void playTicketCue(String cue) {
+        if ("stamp".equals(cue)) play("land");
+        if ("tick".equals(cue)) play("coin");
+    }
+
     private void play(String name) {
         if (!enabled || !active) return;
         submit(() -> {

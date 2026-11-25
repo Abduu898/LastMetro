@@ -24,19 +24,29 @@ public class PreviewSmoke extends Application {
     private void invoke(String name, Class<?> type, Object value) throws Exception {
         var m = MainApp.class.getDeclaredMethod(name, type); m.setAccessible(true); m.invoke(app, value);
     }
+    private void invokeMouseClick(double x, double y) throws Exception {
+        var click = MainApp.class.getDeclaredMethod("handleMouseClick", double.class, double.class);
+        click.setAccessible(true);
+        click.invoke(app, x, y);
+    }
+
     private void key(KeyCode code) {
         stage.getScene().getRoot().fireEvent(new KeyEvent(KeyEvent.KEY_PRESSED, "", "", code, false, false, false, false));
         stage.getScene().getRoot().fireEvent(new KeyEvent(KeyEvent.KEY_RELEASED, "", "", code, false, false, false, false));
     }
     private void settle() throws Exception { ((ScreenTransition) field(app, "screenTransition")).update(.5); }
-    private void capture(String name) throws Exception {
+    private void capture(String name) throws Exception { capture(name, 1280, 720); }
+
+    private void capture(String name, int width, int height) throws Exception {
+        canvas.setWidth(width);
+        canvas.setHeight(height);
         var m = MainApp.class.getDeclaredMethod("drawFrame", Canvas.class, GraphicsContext.class); m.setAccessible(true);
         m.invoke(app, canvas, canvas.getGraphicsContext2D());
         var image = canvas.snapshot(null, null);
-        var output = new BufferedImage(1280, 720, BufferedImage.TYPE_INT_ARGB);
-        int[] pixels = new int[1280 * 720];
-        image.getPixelReader().getPixels(0, 0, 1280, 720, javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, 1280);
-        output.setRGB(0, 0, 1280, 720, pixels, 0, 1280);
+        var output = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        int[] pixels = new int[width * height];
+        image.getPixelReader().getPixels(0, 0, width, height, javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, width);
+        output.setRGB(0, 0, width, height, pixels, 0, width);
         ImageIO.write(output, "png", Path.of("target/preview", name + ".png").toFile());
     }
     private GameWorld quietWorld(GameWorld.Mode mode) throws Exception {
@@ -122,10 +132,45 @@ public class PreviewSmoke extends Application {
             if (world.isFinaleActive() && world.getFinaleTime() > .8 && world.getFinaleTime() < .82) capture("train");
             if (world.isGameOver()) break;
         }
-        settle(); renderer.updateUi(.1, true); capture("victory");
-        if (!world.isPlayerWon()) throw new AssertionError("Catch mode did not win");
-        key(KeyCode.R); settle();
-        if (((GameWorld) field(app, "world")).isGameOver()) throw new AssertionError("Retry failed");
+        settle();
+        if (!world.isPlayerWon() || field(app, "screen") != GameScreen.RESULTS)
+            throw new AssertionError("Catch mode did not open victory ticket");
+        key(KeyCode.F9);
+        capture("victory-reduced-motion");
+        if (renderer.updateVictory(.2) != null) throw new AssertionError("Reduced motion played a ticket cue");
+        key(KeyCode.F9);
+        renderer.resetAnimations();
+        int ticks = 0, stamps = 0;
+        for (int i = 0; i < 60; i++) {
+            String cue = renderer.updateVictory(1.0 / 60);
+            if ("tick".equals(cue)) ticks++;
+            if ("stamp".equals(cue)) stamps++;
+        }
+        if (ticks != 6 || stamps != 1) throw new AssertionError("Wrong number of ticket audio cues");
+        capture("victory");
+        capture("victory-1080p", 1920, 1080);
+        key(KeyCode.SPACE); settle();
+        if (((GameWorld) field(app, "world")).isGameOver() || field(app, "screen") != GameScreen.PLAYING)
+            throw new AssertionError("Space did not retry the run");
+        var screenField = MainApp.class.getDeclaredField("screen");
+        screenField.setAccessible(true);
+        var worldField = MainApp.class.getDeclaredField("world");
+        worldField.setAccessible(true);
+        for (KeyCode shortcut : new KeyCode[] {KeyCode.ENTER, KeyCode.R, KeyCode.ESCAPE}) {
+            worldField.set(app, world);
+            screenField.set(app, GameScreen.RESULTS);
+            key(shortcut); settle();
+            GameScreen expected = shortcut == KeyCode.ESCAPE ? GameScreen.MENU : GameScreen.PLAYING;
+            if (field(app, "screen") != expected) throw new AssertionError("Victory shortcut failed: " + shortcut);
+        }
+        worldField.set(app, world);
+        screenField.set(app, GameScreen.RESULTS);
+        var menu = VictoryTicket.MENU;
+        invokeMouseClick((menu.getMinX() + menu.getWidth() / 2) * 1.5,
+                (menu.getMinY() + menu.getHeight() / 2) * 1.5);
+        settle();
+        if (field(app, "screen") != GameScreen.MENU) throw new AssertionError("1080p ticket button missed");
+        key(KeyCode.DIGIT2); settle();
         world = quietWorld(GameWorld.Mode.ENDLESS);
         for (int hit = 0; hit < 3; hit++) {
             world.getHazards().clear(); world.getHazards().add(new EScooter(154, MainApp.GROUND_Y));
@@ -134,7 +179,7 @@ public class PreviewSmoke extends Application {
         }
         settle(); capture("defeat");
         if (!world.isGameOver()) throw new AssertionError("Defeat failed");
-        System.out.printf("SMOKE PASS: menu, settings, jump, pickup, impact, heart healing, mouse pause/resume, motion toggle, train, victory, retry, endless defeat. Capture average %.1f ms (includes PNG encoding).%n", rendered == 0 ? 0 : renderNanos / 1e6 / rendered);
+        System.out.printf("SMOKE PASS: menu, settings, jump, pickup, impact, heart healing, mouse pause/resume, motion toggle, train, 720p/1080p victory ticket, reduced-motion stamp, retry/menu inputs, endless defeat. Capture average %.1f ms (includes PNG encoding).%n", rendered == 0 ? 0 : renderNanos / 1e6 / rendered);
         app.stop(); stage.close(); javafx.application.Platform.exit();
     }
     public static void main(String[] args) { launch(args); }

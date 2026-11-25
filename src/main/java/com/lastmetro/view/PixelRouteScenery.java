@@ -81,7 +81,9 @@ public final class PixelRouteScenery {
         if (train == null || world.getMode() != GameWorld.Mode.CATCH_THE_METRO || world.getRouteStage() != 2) return;
         double remaining = GameWorld.NORMAL_GOAL_METERS - world.getDistanceMeters();
         if (!world.isFinaleActive() && remaining > 24) return;
-        double x = world.isFinaleActive() ? world.getMetroTrainX()
+        // Frame the departing carriage so its rear remains visible behind the results ticket.
+        double x = world.isFinaleActive() ? GameWorld.TRAIN_STOP_X
+                + .63 * (world.getMetroTrainX() - GameWorld.TRAIN_STOP_X)
                 : GameWorld.TRAIN_STOP_X + 640 * Math.pow(remaining / 24, 1.5);
         if (reducedMotion && !world.isFinaleActive()) x = GameWorld.TRAIN_STOP_X;
         double scale = .93, y = 358;
