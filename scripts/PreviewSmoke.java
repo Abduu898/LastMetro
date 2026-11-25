@@ -63,8 +63,47 @@ public class PreviewSmoke extends Application {
         Files.createDirectories(Path.of(System.getProperty("user.home"), ".lastmetro"));
         Files.writeString(Path.of(System.getProperty("user.home"), ".lastmetro/settings.properties"), "sound=false\n");
         app = new MainApp(); app.start(stage); renderer = (GameRenderer) field(app, "renderer");
-        capture("menu"); key(KeyCode.H); settle(); capture("help"); key(KeyCode.ENTER); settle(); key(KeyCode.O); settle(); capture("settings"); key(KeyCode.ENTER); settle();
+        renderer.updateUi(.1); renderer.updateUi(.1);
+        capture("menu");
+        capture("menu-1080p", 1920, 1080);
+        key(KeyCode.UP);
+        if (!field(app, "menuSelection").equals(3)) throw new AssertionError("Up did not wrap");
+        key(KeyCode.S); key(KeyCode.DOWN);
+        if (!field(app, "menuSelection").equals(1)) throw new AssertionError("Down and S did not advance");
+        capture("menu-endless");
+        key(KeyCode.SPACE); settle();
+        if (((GameWorld) field(app, "world")).getMode() != GameWorld.Mode.ENDLESS)
+            throw new AssertionError("Space did not start the selected Endless mode");
+        var initialScreen = MainApp.class.getDeclaredField("screen");
+        initialScreen.setAccessible(true);
+        initialScreen.set(app, GameScreen.MENU);
+        key(KeyCode.H); settle();
+        if (field(app, "screen") != GameScreen.HOW_TO_PLAY) throw new AssertionError("H did not open help");
+        capture("help");
+        key(KeyCode.ESCAPE); settle();
+        if (field(app, "screen") != GameScreen.MENU) throw new AssertionError("Escape did not close help");
+        key(KeyCode.O); settle();
+        if (field(app, "screen") != GameScreen.SETTINGS) throw new AssertionError("O did not open settings");
+        capture("settings");
+        var back = TicketKiosk.BACK;
+        invokeMouseClick(back.getMinX() + 10, back.getMinY() + 10);
+        settle();
+        if (field(app, "screen") != GameScreen.MENU) throw new AssertionError("Back did not close settings");
+        key(KeyCode.W); key(KeyCode.ENTER); settle();
+        if (field(app, "screen") != GameScreen.HOW_TO_PLAY) throw new AssertionError("Enter did not open selected help");
+        key(KeyCode.ESCAPE); settle();
+        capture("menu-pointer-1080p", 1920, 1080);
+        stage.getScene().getRoot().fireEvent(new MouseEvent(MouseEvent.MOUSE_MOVED, 1050, 620, 1050, 620,
+                MouseButton.NONE, 0, false, false, false, false, false, false, false, false, false, false, null));
+        if (!field(app, "menuSelection").equals(1)) throw new AssertionError("1080p hover did not select Endless");
+        invokeMouseClick(1050, 620);
+        settle();
+        if (((GameWorld) field(app, "world")).getMode() != GameWorld.Mode.ENDLESS)
+            throw new AssertionError("1080p click did not start Endless");
+        initialScreen.set(app, GameScreen.MENU);
         key(KeyCode.DIGIT1); settle();
+        if (((GameWorld) field(app, "world")).getMode() != GameWorld.Mode.CATCH_THE_METRO)
+            throw new AssertionError("1 did not start the timed mode");
         var world = quietWorld(GameWorld.Mode.CATCH_THE_METRO);
         var soundtrack = new com.lastmetro.feedback.RunFeedback();
         var eventLog = new StringBuilder("0.000\tstation\n");
@@ -171,6 +210,8 @@ public class PreviewSmoke extends Application {
         settle();
         if (field(app, "screen") != GameScreen.MENU) throw new AssertionError("1080p ticket button missed");
         key(KeyCode.DIGIT2); settle();
+        if (((GameWorld) field(app, "world")).getMode() != GameWorld.Mode.ENDLESS)
+            throw new AssertionError("2 did not start Endless");
         world = quietWorld(GameWorld.Mode.ENDLESS);
         for (int hit = 0; hit < 3; hit++) {
             world.getHazards().clear(); world.getHazards().add(new EScooter(154, MainApp.GROUND_Y));
@@ -179,7 +220,7 @@ public class PreviewSmoke extends Application {
         }
         settle(); capture("defeat");
         if (!world.isGameOver()) throw new AssertionError("Defeat failed");
-        System.out.printf("SMOKE PASS: menu, settings, jump, pickup, impact, heart healing, mouse pause/resume, motion toggle, train, 720p/1080p victory ticket, reduced-motion stamp, retry/menu inputs, endless defeat. Capture average %.1f ms (includes PNG encoding).%n", rendered == 0 ? 0 : renderNanos / 1e6 / rendered);
+        System.out.printf("SMOKE PASS: 720p/1080p kiosk, four menu actions, keyboard navigation, scaled pointer, settings, jump, pickup, impact, heart healing, mouse pause/resume, motion toggle, train, 720p/1080p victory ticket, reduced-motion stamp, retry/menu inputs, endless defeat. Capture average %.1f ms (includes PNG encoding).%n", rendered == 0 ? 0 : renderNanos / 1e6 / rendered);
         app.stop(); stage.close(); javafx.application.Platform.exit();
     }
     public static void main(String[] args) { launch(args); }

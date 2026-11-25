@@ -44,12 +44,19 @@ public final class GameRenderer {
     private boolean cameraMotion;
     private final ArcadeArt arcade = new ArcadeArt();
     private final ArcadeHud arcadeHud = new ArcadeHud(arcade);
+    private final TicketKiosk kiosk = new TicketKiosk();
+    private int menuSelection, pressedMenuOption = -1;
     private final VictoryTicket victoryTicket = new VictoryTicket(arcade);
     private Rectangle2D pressedResultButton;
     private final PixelRouteScenery pixelRoute = new PixelRouteScenery();
     private double pointerX = -1, pointerY = -1;
     private String jumpLabel = "SPACE", slideLabel = "DOWN";
     public void setPointer(double x, double y) { pointerX = x; pointerY = y; }
+
+    public void setKioskSelection(int selected, int pressed) {
+        menuSelection = selected;
+        pressedMenuOption = pressed;
+    }
 
     public void setPressedResultButton(Rectangle2D button) { pressedResultButton = button; }
 
@@ -191,12 +198,12 @@ public final class GameRenderer {
         cameraMotion = screen == GameScreen.PLAYING;
         gc.save();
         if (screen == GameScreen.PLAYING) gc.translate(effects.cameraX(), effects.cameraY());
-        drawBackground(gc, screen, world);
+        boolean kioskScreen = screen == GameScreen.MENU || screen == GameScreen.HOW_TO_PLAY
+                || screen == GameScreen.SETTINGS;
+        drawBackground(gc, screen, kioskScreen ? null : world);
         gc.restore();
         switch (screen) {
-            case MENU -> drawMenu(gc);
-            case HOW_TO_PLAY -> drawHowToPlay(gc, jumpKey, slideKey);
-            case SETTINGS -> drawSettings(gc, jumpKey, slideKey, bindingPrompt);
+            case MENU, HOW_TO_PLAY, SETTINGS -> drawKiosk(gc, screen, jumpKey, slideKey, bindingPrompt);
             case PLAYING, PAUSED, RESULTS -> {
                 drawGame(gc, world, bannerText, bannerTimer, endlessHighScore);
                 if (screen == GameScreen.PAUSED) {
@@ -245,7 +252,7 @@ public final class GameRenderer {
         gc.setFill(Color.web("#1a1a2e"));
         gc.fillRect(0, 0, WIDTH, HEIGHT);
         double distance = world == null ? 0 : world.getDistanceMeters();
-        double drift = Math.sin(menuTime * 0.22 + distance * 0.004);
+        double drift = Math.sin((effects.isReducedMotion() ? 0 : menuTime) * 0.22 + distance * 0.004);
         gc.setFill(new LinearGradient(0, 190, 0, HEIGHT, false, CycleMethod.NO_CYCLE,
                 new Stop(0, Color.web("#88718a")),
                 new Stop(0.52, Color.web("#62536d")),
@@ -270,7 +277,7 @@ public final class GameRenderer {
 
     private void drawPart1Parallax(GraphicsContext gc, GameWorld world) {
         double cameraOffset = world == null
-                ? menuTime * 31.0
+                ? 3500 + (effects.isReducedMotion() ? 0 : menuTime * 31.0)
                 : world.getDistanceMeters() * 40.0;
 
         double farHeight = HEIGHT;
@@ -395,24 +402,22 @@ public final class GameRenderer {
         }
     }
 
-    private void drawMenu(GraphicsContext gc) {
-        drawMenuBackdrop(gc);
-        ArcadeHud.label(gc, "PARIS  ·  01:14 AM", 640, 70, 15, Color.web("#ffe7b4"), true);
-        ArcadeHud.label(gc, "LAST", 640, 136, 28, Color.web("#fff3d4"), true);
-        arcadeTitle(gc, "MÉTRO", 640, 225, 92);
-        ArcadeHud.label(gc, "ONE CITY. ONE LAST TRAIN. RUN FOR IT.", 640, 260, 14, Color.web("#fff3d4"), true);
-        drawMenuButton(gc, 280, "1  CATCH THE LAST METRO");
-        drawMenuButton(gc, 360, "2  ENDLESS COMMUTE");
-        drawMenuButton(gc, 440, "H  HOW TO PLAY");
-        drawMenuButton(gc, 520, "O  CONTROLS & SETTINGS");
-        ArcadeHud.label(gc, "CLICK TO PLAY  ·  OR USE THE NUMBER KEYS", 640, 631, 13, Color.web("#e9e2ce"), true);
+    private void drawKiosk(GraphicsContext gc, GameScreen screen, String jump, String slide, String binding) {
+        gc.save();
+        gc.setImageSmoothing(false);
+        boolean reduced = effects.isReducedMotion();
         var hero = playerSprites.get("RUNNING");
-        if (hero != null) hero.drawGrounded(gc, (int) (menuTime * 4) % hero.getFrameCount(), 170, 580, 190);
-        ArcadeHud.panel(gc, 985, 340, 230, 150, false);
-        ArcadeHud.label(gc, "THE NIGHT RUN", 1100, 374, 15, Color.web("#ffce76"), true);
-        ArcadeHud.label(gc, "500 METRES", 1100, 413, 23, Color.web("#fff4dc"), true);
-        ArcadeHud.label(gc, "50 SECONDS · 3 HEARTS", 1100, 449, 12, Color.web("#e2d7bd"), true);
-        ArcadeHud.label(gc, "COLLECT · DODGE · CATCH", 1100, 475, 11, Color.web("#e2d7bd"), true);
+        if (hero != null) {
+            int frame = reduced ? 0 : (int) (menuTime * 4) % hero.getFrameCount();
+            hero.drawGrounded(gc, frame, 170, 580, 190);
+        }
+        switch (screen) {
+            case MENU -> kiosk.draw(gc, pixelFontFamily, menuSelection, pressedMenuOption, menuTime, reduced);
+            case HOW_TO_PLAY -> kiosk.help(gc, pixelFontFamily, jump, slide, pointerX, pointerY);
+            case SETTINGS -> kiosk.settings(gc, pixelFontFamily, jump, slide, binding, soundEnabled, reduced, pointerX, pointerY);
+            default -> throw new IllegalArgumentException("Expected a kiosk screen");
+        }
+        gc.restore();
     }
 
     private void arcadeTitle(GraphicsContext gc, String text, double x, double y, int size) {
@@ -421,60 +426,6 @@ public final class GameRenderer {
         gc.setLineWidth(5); gc.setStroke(Color.web("#162332")); gc.strokeText(text, x, y + 4);
         gc.setFill(Color.web("#efcd8b")); gc.fillText(text, x, y);
         gc.restore();
-    }
-
-    private void drawMenuBackdrop(GraphicsContext gc) {
-        gc.setFill(new LinearGradient(0, 0, 0, HEIGHT, false, CycleMethod.NO_CYCLE,
-                new Stop(0, Color.rgb(18, 21, 38, 0.3)),
-                new Stop(0.48, Color.rgb(18, 21, 38, 0.22)),
-                new Stop(1, Color.rgb(18, 21, 38, 0.68))));
-        gc.fillRect(0, 0, WIDTH, HEIGHT);
-    }
-
-    private void drawSettings(GraphicsContext gc, String jumpKey, String slideKey, String bindingPrompt) {
-        drawMenuBackdrop(gc);
-        arcadeTitle(gc, "MAKE IT YOUR RUN", 640, 180, 43);
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Consolas", 22));
-        ArcadeHud.panel(gc, 360, 250, 560, 80, bindingPrompt.equals("jump"));
-        ArcadeHud.panel(gc, 360, 360, 560, 80, bindingPrompt.equals("slide"));
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Consolas", 22));
-        ArcadeHud.label(gc,"JUMP   " + (bindingPrompt.equals("jump") ? "PRESS A KEY..." : jumpKey.toUpperCase()),420,295,22,Color.WHITE,false);
-        ArcadeHud.label(gc,"SLIDE   " + (bindingPrompt.equals("slide") ? "PRESS A KEY..." : slideKey.toUpperCase()),420,405,22,Color.WHITE,false);
-        gc.setFill(Color.LIGHTGRAY);
-        gc.setFont(Font.font("Consolas", 17));
-        ArcadeHud.label(gc,"CLICK A CONTROL, THEN PRESS A KEY. J / S SELECTS.",315,590,16,Color.LIGHTGRAY,false);
-        String note = bindingPrompt.equals("reserved") ? "That key is reserved. Choose a different one."
-                : bindingPrompt.equals("unsaved") ? "Could not save settings. Check folder permissions."
-                : "F8 / F9 / P / ESC / ENTER reserved. ENTER / ESC returns.";
-        ArcadeHud.label(gc,note,335,620,16,Color.LIGHTGRAY,false);
-        drawSettingToggle(gc, 460, "F8  SOUND", soundEnabled ? "ON" : "OFF");
-        drawSettingToggle(gc, 514, "F9  REDUCED MOTION", effects.isReducedMotion() ? "ON" : "OFF");
-    }
-
-    private void drawSettingToggle(GraphicsContext gc,double y,String label,String value) {
-        ArcadeHud.panel(gc,360,y,560,42,false);
-        ArcadeHud.label(gc,label,385,y+27,18,Color.web("#efcd8b"),false);
-        ArcadeHud.label(gc,value,838,y+27,18,Color.web("#f4ebd5"),false);
-    }
-
-    private void drawMenuButton(GraphicsContext gc, double y, String label) {
-        boolean hover = pointerX >= 360 && pointerX <= 920 && pointerY >= y && pointerY < y + 66;
-        ArcadeHud.panel(gc, 360, y, 560, 66, y == 280 || hover);
-        ArcadeHud.label(gc, label, 640, y + 41, 21, y == 280 || hover ? Color.web("#263246") : Color.web("#fff0ce"), true);
-    }
-
-    private void drawHowToPlay(GraphicsContext gc,String jumpKey,String slideKey) {
-        drawMenuBackdrop(gc);ArcadeHud.panel(gc,260,225,760,325,false);
-        arcadeTitle(gc,"HOW TO PLAY",640,190,48);
-        String[] lines={jumpKey.toUpperCase()+"  HOLD: HIGH JUMP / TAP: SHORT HOP",
-                slideKey.toUpperCase()+"  SLIDE / FAST-FALL IN THE AIR","P / ESC  PAUSE OR RESUME",
-                "COINS  BUILD A STREAK FOR UP TO 4x POINTS","NAVIGO  FIVE-SECOND COIN MAGNET",
-                "HEARTS  RESTORE A LIFE, UP TO THREE","CATCH  500 m IN 50 SECONDS / ENDLESS: SURVIVE"};
-        for(int i=0;i<lines.length;i++)ArcadeHud.label(gc,lines[i],300,270+i*39,18,
-                i>=3?Color.web("#efcd8b"):Color.web("#f4ebd5"),false);
-        drawButton(gc,470,580,340,"BACK TO MENU");
     }
 
     private void drawGame(GraphicsContext gc, GameWorld world, String bannerText,

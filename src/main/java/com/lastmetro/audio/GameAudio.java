@@ -81,6 +81,13 @@ public final class GameAudio implements AutoCloseable {
             case LOSE -> { play("lose"); voice("missed"); }
         }
     }
+    public void playKioskCue(boolean confirm) {
+        if (!enabled) return;
+        submit(() -> {
+            if (enabled) restartClip(confirm ? "land" : "coin");
+        });
+    }
+
     public void playTicketCue(String cue) {
         if ("stamp".equals(cue)) play("land");
         if ("tick".equals(cue)) play("coin");
@@ -90,10 +97,15 @@ public final class GameAudio implements AutoCloseable {
         if (!enabled || !active) return;
         submit(() -> {
             if (!enabled || !active) return;
-            Clip clip = clips.get(name);
-            if (clip != null) { clip.stop(); clip.setFramePosition(0); clip.start(); }
+            restartClip(name);
         });
     }
+
+    private void restartClip(String name) {
+        Clip clip = clips.get(name);
+        if (clip != null) { clip.stop(); clip.setFramePosition(0); clip.start(); }
+    }
+
     private void voice(String name) {
         submit(() -> { for (String other : VOICES) { var clip = clips.get(other); if (clip != null) clip.stop(); } });
         play(name);

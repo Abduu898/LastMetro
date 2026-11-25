@@ -88,13 +88,13 @@ public final class VictoryTicket {
     private void paper(GraphicsContext gc) {
         gc.save();
         gc.translate(4, 4);
-        ticketPath(gc);
+        TicketPaper.path(gc, X, Y, W, H, false);
         gc.setFill(SHADOW);
         gc.fill();
         gc.restore();
 
         gc.save();
-        ticketPath(gc);
+        TicketPaper.path(gc, X, Y, W, H, false);
         gc.setFill(PAPER);
         gc.fill();
         gc.clip();
@@ -106,32 +106,8 @@ public final class VictoryTicket {
 
         gc.setStroke(BORDER);
         gc.setLineWidth(3);
-        ticketPath(gc);
+        TicketPaper.path(gc, X, Y, W, H, false);
         gc.stroke();
-    }
-
-    private void ticketPath(GraphicsContext gc) {
-        int right = X + W, bottom = Y + H, punch = Y + H / 2;
-        gc.beginPath();
-        gc.moveTo(X, Y);
-        for (int x = X + 8; x + 6 <= right - 8; x += 16) {
-            gc.lineTo(x, Y); gc.lineTo(x, Y + 4);
-            gc.lineTo(x + 6, Y + 4); gc.lineTo(x + 6, Y);
-        }
-        gc.lineTo(right, Y);
-        gc.lineTo(right, punch - 16); gc.lineTo(right - 6, punch - 16);
-        gc.lineTo(right - 6, punch - 12); gc.lineTo(right - 12, punch - 12);
-        gc.lineTo(right - 12, punch - 7); gc.lineTo(right - 16, punch - 7);
-        gc.lineTo(right - 16, punch + 7); gc.lineTo(right - 12, punch + 7);
-        gc.lineTo(right - 12, punch + 12); gc.lineTo(right - 6, punch + 12);
-        gc.lineTo(right - 6, punch + 16); gc.lineTo(right, punch + 16);
-        gc.lineTo(right, bottom);
-        for (int x = right - 8; x - 6 >= X + 8; x -= 16) {
-            gc.lineTo(x, bottom); gc.lineTo(x, bottom - 4);
-            gc.lineTo(x - 6, bottom - 4); gc.lineTo(x - 6, bottom);
-        }
-        gc.lineTo(X, bottom);
-        gc.closePath();
     }
 
     private void header(GraphicsContext gc, String font) {
@@ -143,21 +119,10 @@ public final class VictoryTicket {
         ink(gc, font, "RATP • RÉSEAU URBAIN", 437, 174, 10, MUTED, TextAlignment.LEFT);
         fill(gc, TEAL, 707, 155, 149, 27);
         ink(gc, font, "TICKET t+ VALIDÉ", 781.5, 173, 9, PAPER, TextAlignment.CENTER);
-        lineBadge(gc, font, 450, "1", Color.web("#FFCE00"), INK);
-        lineBadge(gc, font, 482, "4", Color.web("#A0006E"), Color.WHITE);
+        TicketPaper.lineBadge(gc, font, 450, 210, "1", Color.web("#FFCE00"), INK);
+        TicketPaper.lineBadge(gc, font, 482, 210, "4", Color.web("#A0006E"), Color.WHITE);
         ink(gc, font, "CHÂTELET — LEVEL COMPLETE!", 505, 216, 13, INK, TextAlignment.LEFT);
         ink(gc, font, "WELCOME ABOARD. PARIS CAN WAIT.", 437, 239, 10, MUTED, TextAlignment.LEFT);
-    }
-
-    private void lineBadge(GraphicsContext gc, String font, int x, String line, Color face, Color text) {
-        int y = 210;
-        gc.setFill(INK);
-        gc.fillPolygon(new double[]{x-8,x+8,x+14,x+14,x+8,x-8,x-14,x-14},
-                new double[]{y-14,y-14,y-8,y+8,y+14,y+14,y+8,y-8},8);
-        gc.setFill(face);
-        gc.fillPolygon(new double[]{x-7,x+7,x+12,x+12,x+7,x-7,x-12,x-12},
-                new double[]{y-12,y-12,y-7,y+7,y+12,y+12,y+7,y-7},8);
-        ink(gc, font, line, x, y + 5, 13, text, TextAlignment.CENTER);
     }
 
     private void row(GraphicsContext gc, String family, String label, String value, int y, int left) {
