@@ -1,6 +1,6 @@
 # Last Métro — Dernière Rame
 
-> Sprint through a pixel-art Paris at 1:14 AM and catch the final métro before it disappears.
+> Sprint through pixel-art Paris at 1:14 AM and catch the final métro before it disappears.
 
 **Last Métro** is a JavaFX arcade runner with two game modes, configurable controls, animated sprites, and a three-layer Paris street scene.
 
